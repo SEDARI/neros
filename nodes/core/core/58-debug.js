@@ -1,26 +1,13 @@
-/**
- * Copyright 2013, 2016 IBM Corp.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
 
 module.exports = function(RED) {
     "use strict";
     var util = require("util");
     var events = require("events");
+    var path = require("path");
+    var safeJSONStringify = require("json-stringify-safe");
     var debuglength = RED.settings.debugMaxLength||1000;
-    var useColors = false;
-    // util.inspect.styles.boolean = "red";
+    var useColors = RED.settings.debugUseColors || false;
+    util.inspect.styles.boolean = "red";
 
     function DebugNode(n) {
         RED.nodes.createNode(this,n);
@@ -42,7 +29,7 @@ module.exports = function(RED) {
                     node.log("\n"+util.inspect(msg, {colors:useColors, depth:10}));
                 }
                 if (this.active) {
-                    sendDebug({id:this.id,name:this.name,topic:msg.topic,msg:msg,_path:msg._path});
+                    sendDebug({id:node.id,name:node.name,topic:msg.topic,msg:msg,_path:msg._path});
                 }
             } else {
             // debug user defined msg property
@@ -66,45 +53,110 @@ module.exports = function(RED) {
                     }
                 }
                 if (this.active) {
-                    sendDebug({id:this.id,z:this.z,name:this.name,topic:msg.topic,property:property,msg:output,_path:msg._path});
+                    sendDebug({id:node.id,z:node.z,name:node.name,topic:msg.topic,property:property,msg:output,_path:msg._path});
                 }
             }
         });
     }
 
-    RED.nodes.registerType("debug",DebugNode);
+    RED.nodes.registerType("debug",DebugNode, {
+        settings: {
+            debugUseColors: {
+                value: false,
+            },
+            debugMaxLength: {
+                value: 1000,
+            }
+        }
+    });
 
     function sendDebug(msg) {
+        // don't put blank errors in sidebar (but do add to logs)
+        //if ((msg.msg === "") && (msg.hasOwnProperty("level")) && (msg.level === 20)) { return; }
         if (msg.msg instanceof Error) {
             msg.format = "error";
-            msg.msg = msg.msg.toString();
+            var errorMsg = {};
+            if (msg.msg.name) {
+                errorMsg.name = msg.msg.name;
+            }
+            if (msg.msg.hasOwnProperty('message')) {
+                errorMsg.message = msg.msg.message;
+            } else {
+                errorMsg.message = msg.msg.toString();
+            }
+            msg.msg = JSON.stringify(errorMsg);
         } else if (msg.msg instanceof Buffer) {
-            msg.format = "buffer ["+msg.msg.length+"]";
+            msg.format = "buffer["+msg.msg.length+"]";
             msg.msg = msg.msg.toString('hex');
+            if (msg.msg.length > debuglength) {
+                msg.msg = msg.msg.substring(0,debuglength);
+            }
         } else if (msg.msg && typeof msg.msg === 'object') {
-            var seen = [];
             try {
                 msg.format = msg.msg.constructor.name || "Object";
+                // Handle special case of msg.req/res objects from HTTP In node
+                if (msg.format === "IncomingMessage" || msg.format === "ServerResponse") {
+                    msg.format = "Object";
+                }
             } catch(err) {
                 msg.format = "Object";
             }
-            var isArray = util.isArray(msg.msg);
-            if (isArray) {
-                msg.format = "array ["+msg.msg.length+"]";
-            }
-            if (isArray || (msg.format === "Object")) {
-                msg.msg = JSON.stringify(msg.msg, function(key, value) {
-                    if (typeof value === 'object' && value !== null) {
-                        if (seen.indexOf(value) !== -1) { return "[circular]"; }
-                        seen.push(value);
-                    }
-                    return value;
-                }," ");
+            if (/error/i.test(msg.format)) {
+                msg.msg = JSON.stringify({
+                    name: msg.msg.name,
+                    message: msg.msg.message
+                });
             } else {
-                try { msg.msg = msg.msg.toString(); }
-                catch(e) { msg.msg = "[Type not printable]"; }
+                var isArray = util.isArray(msg.msg);
+                if (isArray) {
+                    msg.format = "array["+msg.msg.length+"]";
+                    if (msg.msg.length > debuglength) {
+                        // msg.msg = msg.msg.slice(0,debuglength);
+                        msg.msg = {
+                            __encoded__: true,
+                            type: "array",
+                            data: msg.msg.slice(0,debuglength),
+                            length: msg.msg.length
+                        }
+                    }
+                }
+                if (isArray || (msg.format === "Object")) {
+                    msg.msg = safeJSONStringify(msg.msg, function(key, value) {
+                        if (key === '_req' || key === '_res') {
+                            value = "[internal]"
+                        } else if (value instanceof Error) {
+                            value = value.toString()
+                        } else if (util.isArray(value) && value.length > debuglength) {
+                            value = {
+                                __encoded__: true,
+                                type: "array",
+                                data: value.slice(0,debuglength),
+                                length: value.length
+                            }
+                        } else if (typeof value === 'string') {
+                            if (value.length > debuglength) {
+                                value = value.substring(0,debuglength)+"...";
+                            }
+                        } else if (value && value.constructor) {
+                            if (value.constructor.name === "Buffer") {
+                                value.__encoded__ = true;
+                                value.length = value.data.length;
+                                if (value.length > debuglength) {
+                                    value.data = value.data.slice(0,debuglength);
+                                }
+                            } else if (value.constructor.name === "ServerResponse") {
+                                value = "[internal]"
+                            } else if (value.constructor.name === "Socket") {
+                                value = "[internal]"
+                            }
+                        }
+                        return value;
+                    }," ");
+                } else {
+                    try { msg.msg = msg.msg.toString(); }
+                    catch(e) { msg.msg = "[Type not printable]"; }
+                }
             }
-            seen = null;
         } else if (typeof msg.msg === "boolean") {
             msg.format = "boolean";
             msg.msg = msg.msg.toString();
@@ -118,13 +170,14 @@ module.exports = function(RED) {
             msg.format = (msg.msg === null)?"null":"undefined";
             msg.msg = "(undefined)";
         } else {
-            msg.format = "string ["+msg.msg.length+"]";
-            msg.msg = msg.msg;
+            msg.format = "string["+msg.msg.length+"]";
+            if (msg.msg.length > debuglength) {
+                msg.msg = msg.msg.substring(0,debuglength)+"...";
+            }
         }
-
-        if (msg.msg.length > debuglength) {
-            msg.msg = msg.msg.substr(0,debuglength) +" ....";
-        }
+        // if (msg.msg.length > debuglength) {
+        //     msg.msg = msg.msg.substr(0,debuglength) +" ....";
+        // }
         RED.comms.publish("debug",msg);
     }
 
@@ -152,5 +205,15 @@ module.exports = function(RED) {
         } else {
             res.sendStatus(404);
         }
+    });
+
+    // As debug/view/debug-utils.js is loaded via <script> tag, it won't get
+    // the auth header attached. So do not use RED.auth.needsPermission here.
+    RED.httpAdmin.get("/debug/view/*",function(req,res) {
+        var options = {
+            root: __dirname + '/lib/debug/',
+            dotfiles: 'deny'
+        };
+        res.sendFile(req.params[0], options);
     });
 };

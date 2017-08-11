@@ -1,5 +1,5 @@
 /**
- * Copyright 2014, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@ var needsPermission = auth.needsPermission;
 var i18n;
 var log;
 var adminApp;
-var nodeApp;
 var server;
 var runtime;
 
@@ -68,9 +67,6 @@ function init(_server,_runtime) {
     var settings = runtime.settings;
     i18n = runtime.i18n;
     log = runtime.log;
-    if (settings.httpNodeRoot !== false) {
-        nodeApp = express();
-    }
     if (settings.httpAdminRoot !== false) {
         comms.init(server,runtime);
         adminApp = express();
@@ -87,30 +83,42 @@ function init(_server,_runtime) {
         if (!settings.disableEditor) {
             ui.init(runtime);
             var editorApp = express();
-            editorApp.get("/",ensureRuntimeStarted,ui.ensureSlash,ui.editor);
-            editorApp.get("/icons/:icon",ui.icon);
-            theme.init(runtime);
-            if (settings.editorTheme) {
-                editorApp.use("/theme",theme.app());
+            if (settings.requireHttps === true) {
+                editorApp.enable('trust proxy');
+                editorApp.use(function (req, res, next) {
+                    if (req.secure) {
+                        next();
+                    } else {
+                        res.redirect('https://' + req.headers.host + req.originalUrl);
+                    }
+                });
             }
+            editorApp.get("/",ensureRuntimeStarted,ui.ensureSlash,ui.editor);
+            editorApp.get("/icons/:module/:icon",ui.icon);
+            editorApp.get("/icons/:scope/:module/:icon",ui.icon);            
+            theme.init(runtime);
+            editorApp.use("/theme",theme.app());
             editorApp.use("/",ui.editorResources);
             adminApp.use(editorApp);
         }
-        var maxApiRequestSize = settings.apiMaxLength || '1mb';
+        var maxApiRequestSize = settings.apiMaxLength || '5mb';
         adminApp.use(bodyParser.json({limit:maxApiRequestSize}));
         adminApp.use(bodyParser.urlencoded({limit:maxApiRequestSize,extended:true}));
 
         adminApp.get("/auth/login",auth.login,errorHandler);
 
         if (settings.adminAuth) {
-            //TODO: all passport references ought to be in ./auth
-            adminApp.use(passport.initialize());
-            adminApp.post("/auth/token",
-                auth.ensureClientSecret,
-                auth.authenticateClient,
-                auth.getToken,
-                auth.errorHandler
-            );
+            if (settings.adminAuth.type === "strategy") {
+                auth.genericStrategy(adminApp,settings.adminAuth.strategy);
+            } else if (settings.adminAuth.type === "credentials") {
+                adminApp.use(passport.initialize());
+                adminApp.post("/auth/token",
+                    auth.ensureClientSecret,
+                    auth.authenticateClient,
+                    auth.getToken,
+                    auth.errorHandler
+                );
+            }
             adminApp.post("/auth/revoke",needsPermission(""),auth.revoke,errorHandler);
         }
         if (settings.httpAdminCors) {
@@ -140,6 +148,7 @@ function init(_server,_runtime) {
 
         adminApp.get('/credentials/:type/:id', needsPermission("credentials.read"),credentials.get,errorHandler);
 
+        adminApp.get('/locales/nodes',locales.getAllNodes,errorHandler);
         adminApp.get(/locales\/(.+)\/?$/,locales.get,errorHandler);
 
         // Library
@@ -155,7 +164,12 @@ function init(_server,_runtime) {
     }
 }
 function start() {
-    return i18n.registerMessageCatalog("editor",path.resolve(path.join(__dirname,"locales")),"editor.json").then(function(){
+    var catalogPath = path.resolve(path.join(__dirname,"locales"));
+    return i18n.registerMessageCatalogs([
+        {namespace: "editor",   dir: catalogPath, file:"editor.json"},
+        {namespace: "jsonata",  dir: catalogPath, file:"jsonata.json"},
+        {namespace: "infotips", dir: catalogPath, file:"infotips.json"}
+    ]).then(function(){
         comms.start();
     });
 }
@@ -177,6 +191,5 @@ module.exports = {
         publish: comms.publish
     },
     get adminApp() { return adminApp; },
-    get nodeApp() { return nodeApp; },
     get server() { return server; }
 };

@@ -2,13 +2,19 @@
     "runtime": {
         "welcome": "Welcome to Node-RED",
         "version": "__component__ version: __version__",
+        "unsupported_version": "Unsupported version of __component__. Requires: __requires__ Found: __version__",
         "paths": {
-            "settings": "Settings file  : __path__"
+            "settings": "Settings file  : __path__",
+            "httpStatic": "HTTP Static    : __path__"
         }
     },
 
     "server": {
         "loading": "Loading palette nodes",
+        "palette-editor": {
+            "disabled": "Palette editor disabled : user settings",
+            "npm-not-found": "Palette editor disabled : npm command not found"
+        },
         "errors": "Failed to register __count__ node type",
         "errors_plural": "Failed to register __count__ node types",
         "errors-help": "Run with -v for details",
@@ -19,12 +25,15 @@
         "removed-types": "Removed node types:",
         "install": {
             "invalid": "Invalid module name",
-            "installing": "Installing module: __name__",
+            "installing": "Installing module: __name__, version: __version__",
             "installed": "Installed module: __name__",
             "install-failed": "Install failed",
             "install-failed-long": "Installation of module __name__ failed:",
             "install-failed-not-found": "$t(install-failed-long) module not found",
-
+            "upgrading": "Upgrading module: __name__ to version: __version__",
+            "upgraded": "Upgraded module: __name__. Restart Node-RED to use the new version",
+            "upgrade-failed-not-found": "$t(server.install.install-failed-long) version not found",
+            "install-failed-not-found": "$t(server.install.install-failed-long) module not found",
             "uninstalling": "Uninstalling module: __name__",
             "uninstall-failed": "Uninstall failed",
             "uninstall-failed-long": "Uninstall of module __name__ failed:",
@@ -72,6 +81,7 @@
     "nodes": {
         "credentials": {
             "error":"Error loading credentials: __message__",
+            "error-saving":"Error saving credentials: __message__",
             "not-registered": "Credential type '__type__' is not registered"
         },
         "flows": {
@@ -90,6 +100,7 @@
             "stopped-modified-flows": "Stopped modified flows",
             "stopped-flows": "Stopped flows",
             "stopped": "Stopped",
+            "stopping-error": "Error stopping node: __message__",
             "added-flow": "Adding flow: __label__",
             "updated-flow": "Updated flow: __label__",
             "removed-flow": "Removed flow: __label__",

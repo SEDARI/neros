@@ -1,5 +1,5 @@
 /**
- * Copyright 2013, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,6 +122,12 @@ function writeFile(path,content) {
     });
 }
 
+function parseJSON(data) {
+    if (data.charCodeAt(0) === 0xFEFF) {
+        data = data.slice(1)
+    }
+    return JSON.parse(data);
+}
 
 function readFile(path,backupPath,emptyResponse,type) {
     return when.promise(function(resolve) {
@@ -154,7 +160,7 @@ function readFile(path,backupPath,emptyResponse,type) {
                     }
                 }
                 try {
-                    return resolve(JSON.parse(data));
+                    return resolve(parseJSON(data));
                 } catch(parseErr) {
                     log.warn(log._("storage.localfilesystem.invalid",{type:type}));
                     return resolve(emptyResponse);
@@ -180,9 +186,19 @@ var localfilesystem = {
                 fs.statSync(fspath.join(process.env.NODE_RED_HOME,".config.json"));
                 settings.userDir = process.env.NODE_RED_HOME;
             } catch(err) {
-                settings.userDir = fspath.join(process.env.HOME || process.env.HOMEPATH || process.env.USERPROFILE || process.env.NODE_RED_HOME,".node-red");
-                if (!settings.readOnly) {
-                    promises.push(promiseDir(fspath.join(settings.userDir,"node_modules")));
+                try {
+                    // Consider compatibility for older versions
+                    if (process.env.HOMEPATH) {
+                        fs.statSync(fspath.join(process.env.HOMEPATH,".node-red",".config.json"));
+                        settings.userDir = fspath.join(process.env.HOMEPATH,".node-red");
+                    }
+                } catch(err) {
+                }
+                if (!settings.userDir) {
+                    settings.userDir = fspath.join(process.env.HOME || process.env.USERPROFILE || process.env.HOMEPATH || process.env.NODE_RED_HOME,".node-red");
+                    if (!settings.readOnly) {
+                        promises.push(promiseDir(fspath.join(settings.userDir,"node_modules")));
+                    }
                 }
             }
         }
@@ -230,11 +246,25 @@ var localfilesystem = {
 
         globalSettingsFile = fspath.join(settings.userDir,".config.json");
 
+        var packageFile = fspath.join(settings.userDir,"package.json");
+        var packagePromise = when.resolve();
         if (!settings.readOnly) {
             promises.push(promiseDir(libFlowsDir));
+            packagePromise = function() {
+                try {
+                    fs.statSync(packageFile);
+                } catch(err) {
+                    var defaultPackage = {
+                        "name": "node-red-project",
+                        "description": "A Node-RED Project",
+                        "version": "0.0.1"
+                    };
+                    return writeFile(packageFile,JSON.stringify(defaultPackage,"",4));
+                }
+                return true;
+            }
         }
-
-        return when.all(promises);
+        return when.all(promises).then(packagePromise);
     },
 
     getFlows: function() {
@@ -293,7 +323,7 @@ var localfilesystem = {
             fs.readFile(globalSettingsFile,'utf8',function(err,data) {
                 if (!err) {
                     try {
-                        return resolve(JSON.parse(data));
+                        return resolve(parseJSON(data));
                     } catch(err2) {
                         log.trace("Corrupted config detected - resetting");
                     }
@@ -302,18 +332,18 @@ var localfilesystem = {
             })
         })
     },
-    saveSettings: function(settings) {
+    saveSettings: function(newSettings) {
         if (settings.readOnly) {
             return when.resolve();
         }
-        return writeFile(globalSettingsFile,JSON.stringify(settings,null,1));
+        return writeFile(globalSettingsFile,JSON.stringify(newSettings,null,1));
     },
     getSessions: function() {
         return when.promise(function(resolve,reject) {
             fs.readFile(sessionsFile,'utf8',function(err,data){
                 if (!err) {
                     try {
-                        return resolve(JSON.parse(data));
+                        return resolve(parseJSON(data));
                     } catch(err2) {
                         log.trace("Corrupted sessions file - resetting");
                     }
@@ -332,49 +362,65 @@ var localfilesystem = {
     getLibraryEntry: function(type,path) {
         var root = fspath.join(libDir,type);
         var rootPath = fspath.join(libDir,type,path);
-        return promiseDir(root).then(function () {
-            return nodeFn.call(fs.lstat, rootPath).then(function(stats) {
-                if (stats.isFile()) {
-                    return getFileBody(root,path);
-                }
-                if (path.substr(-1) == '/') {
-                    path = path.substr(0,path.length-1);
-                }
-                return nodeFn.call(fs.readdir, rootPath).then(function(fns) {
-                    var dirs = [];
-                    var files = [];
-                    fns.sort().filter(function(fn) {
-                        var fullPath = fspath.join(path,fn);
-                        var absoluteFullPath = fspath.join(root,fullPath);
-                        if (fn[0] != ".") {
-                            var stats = fs.lstatSync(absoluteFullPath);
-                            if (stats.isDirectory()) {
-                                dirs.push(fn);
-                            } else {
-                                var meta = getFileMeta(root,fullPath);
-                                meta.fn = fn;
-                                files.push(meta);
-                            }
+
+        // don't create the folder if it does not exist - we are only reading....
+        return nodeFn.call(fs.lstat, rootPath).then(function(stats) {
+            if (stats.isFile()) {
+                return getFileBody(root,path);
+            }
+            if (path.substr(-1) == '/') {
+                path = path.substr(0,path.length-1);
+            }
+            return nodeFn.call(fs.readdir, rootPath).then(function(fns) {
+                var dirs = [];
+                var files = [];
+                fns.sort().filter(function(fn) {
+                    var fullPath = fspath.join(path,fn);
+                    var absoluteFullPath = fspath.join(root,fullPath);
+                    if (fn[0] != ".") {
+                        var stats = fs.lstatSync(absoluteFullPath);
+                        if (stats.isDirectory()) {
+                            dirs.push(fn);
+                        } else {
+                            var meta = getFileMeta(root,fullPath);
+                            meta.fn = fn;
+                            files.push(meta);
                         }
-                    });
-                    return dirs.concat(files);
+                    }
                 });
-            }).otherwise(function(err) {
-                if (type === "flows" && !/\.json$/.test(path)) {
-                    return localfilesystem.getLibraryEntry(type,path+".json")
-                        .otherwise(function(e) {
-                            throw err;
-                        });
-                } else {
-                    throw err;
-                }
+                return dirs.concat(files);
             });
+        }).otherwise(function(err) {
+            // if path is empty, then assume it was a folder, return empty
+            if (path === ""){
+                return [];
+            }
+
+            // if path ends with slash, it was a folder
+            // so return empty
+            if (path.substr(-1) == '/') {
+                return [];
+            }
+
+            // else path was specified, but did not exist,
+            // check for path.json as an alternative if flows
+            if (type === "flows" && !/\.json$/.test(path)) {
+                return localfilesystem.getLibraryEntry(type,path+".json")
+                .otherwise(function(e) {
+                    throw err;
+                });
+            } else {
+                throw err;
+            }
         });
     },
 
     saveLibraryEntry: function(type,path,meta,body) {
         if (settings.readOnly) {
             return when.resolve();
+        }
+        if (type === "flows" && !path.endsWith(".json")) {
+            path += ".json";
         }
         var fn = fspath.join(libDir, type, path);
         var headers = "";

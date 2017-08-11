@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,12 +90,12 @@ describe('range Node', function() {
         genericRangeTest("roll", 0, 10, 0, 360, true, 12.5, 90, done); // 1/4 around wrap => "one and a quarter turns"
     });
 
-    it('wraps numbers around say for degree/rotation reading 1/4', function(done) {
-        genericRangeTest("roll", 0, 10, 0, 360, true, 12.5, 90, done); // 1/4 around wrap => "one and a quarter turns"
-    });
-
     it('wraps numbers down say for degree/rotation reading 1/4', function(done) {
         genericRangeTest("roll", 0, 10, 0, 360, true, -12.5, 270, done); // 1/4 backwards wrap => "one and a quarter turns backwards"
+    });
+
+    it('wraps numbers around say for degree/rotation reading 0', function(done) {
+        genericRangeTest("roll", 0, 10, 0, 360, true, -10, 0, done);
     });
 
     it('clamps numbers within a range - over max', function(done) {
@@ -134,7 +134,7 @@ describe('range Node', function() {
 
             var sinon = require('sinon');
             sinon.stub(rangeNode1, 'log', function(log) {
-                if(log.indexOf("notnumber") > -1) {
+                if (log.indexOf("notnumber") > -1) {
                     done();
                 } else {
                     try {

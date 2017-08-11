@@ -1,5 +1,5 @@
 /**
- * Copyright 2015, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,9 @@
  //var UglifyJS = require("uglify-js");
 var util = require("util");
 var when = require("when");
+var path = require("path");
+var fs = require("fs");
+
 var events = require("../../events");
 
 var settings;
@@ -41,6 +44,9 @@ function init(_settings,_loader) {
     nodeList = [];
     nodeConfigCache = null;
     Node = require("../Node");
+    events.removeListener("node-icon-dir",nodeIconDir);
+    events.on("node-icon-dir",nodeIconDir);
+
 }
 
 function load() {
@@ -56,7 +62,8 @@ function filterNodeInfo(n) {
         id: n.id||n.module+"/"+n.name,
         name: n.name,
         types: n.types,
-        enabled: n.enabled
+        enabled: n.enabled,
+        local: n.local||false
     };
     if (n.hasOwnProperty("module")) {
         r.module = n.module;
@@ -81,7 +88,8 @@ function getNode(id) {
 
 function saveNodeList() {
     var moduleList = {};
-
+    var hadPending = false;
+    var hasPending = false;
     for (var module in moduleConfigs) {
         /* istanbul ignore else */
         if (moduleConfigs.hasOwnProperty(module)) {
@@ -90,8 +98,18 @@ function saveNodeList() {
                     moduleList[module] = {
                         name: module,
                         version: moduleConfigs[module].version,
+                        local: moduleConfigs[module].local||false,
                         nodes: {}
                     };
+                    if (moduleConfigs[module].hasOwnProperty('pending_version')) {
+                        hadPending = true;
+                        if (moduleConfigs[module].pending_version !== moduleConfigs[module].version) {
+                            moduleList[module].pending_version = moduleConfigs[module].pending_version;
+                            hasPending = true;
+                        } else {
+                            delete moduleConfigs[module].pending_version;
+                        }
+                    }
                 }
                 var nodes = moduleConfigs[module].nodes;
                 for(var node in nodes) {
@@ -108,6 +126,9 @@ function saveNodeList() {
                 }
             }
         }
+    }
+    if (hadPending && !hasPending) {
+        events.emit("runtime-event",{id:"restart-required",retain: true});
     }
     if (settings.available()) {
         return settings.set("nodes",moduleList);
@@ -179,6 +200,7 @@ function addNodeSet(id,set,version) {
     if (version) {
         moduleConfigs[set.module].version = version;
     }
+    moduleConfigs[set.module].local = set.local;
 
     moduleConfigs[set.module].nodes[set.name] = set;
     nodeList.push(id);
@@ -277,6 +299,9 @@ function getNodeList(filter) {
                 if (nodes.hasOwnProperty(node)) {
                     var nodeInfo = filterNodeInfo(nodes[node]);
                     nodeInfo.version = moduleConfigs[module].version;
+                    if (moduleConfigs[module].pending_version) {
+                        nodeInfo.pending_version = moduleConfigs[module].pending_version;
+                    }
                     if (!filter || filter(nodes[node])) {
                         list.push(nodeInfo);
                     }
@@ -306,6 +331,7 @@ function getModuleInfo(module) {
         var m = {
             name: module,
             version: moduleConfigs[module].version,
+            local: moduleConfigs[module].local,
             nodes: []
         };
         for (var i = 0; i < nodes.length; ++i) {
@@ -467,6 +493,7 @@ function enableNodeSet(typeOrId) {
         delete config.err;
         config.enabled = true;
         nodeConfigCache = null;
+        settings.enableNodeSettings(config.types);
         return saveNodeList().then(function() {
             return filterNodeInfo(config);
         });
@@ -489,6 +516,7 @@ function disableNodeSet(typeOrId) {
         // TODO: persist setting
         config.enabled = false;
         nodeConfigCache = null;
+        settings.disableNodeSettings(config.types);
         return saveNodeList().then(function() {
             return filterNodeInfo(config);
         });
@@ -535,6 +563,49 @@ function cleanModuleList() {
         saveNodeList();
     }
 }
+function setModulePendingUpdated(module,version) {
+    moduleConfigs[module].pending_version = version;
+    return saveNodeList().then(function() {
+        return getModuleInfo(module);
+    });
+}
+
+var icon_paths = {
+    "node-red":[path.resolve(__dirname + '/../../../../public/icons')]
+};
+var iconCache = {};
+var defaultIcon = path.resolve(__dirname + '/../../../../public/icons/arrow-in.png');
+
+function nodeIconDir(dir) {
+    icon_paths[dir.name] = icon_paths[dir.name] || [];
+    icon_paths[dir.name].push(path.resolve(dir.path));
+}
+
+function getNodeIconPath(module,icon) {
+    var iconName = module+"/"+icon;
+    if (iconCache[iconName]) {
+        return iconCache[iconName];
+    } else {
+        var paths = icon_paths[module];
+        if (paths) {
+            for (var p=0;p<paths.length;p++) {
+                var iconPath = path.join(paths[p],icon);
+                try {
+                    fs.statSync(iconPath);
+                    iconCache[iconName] = iconPath;
+                    return iconPath;
+                } catch(err) {
+                    // iconPath doesn't exist
+                }
+            }
+        }
+        if (module !== "node-red") {
+            return getNodeIconPath("node-red", icon);
+        }
+
+        return defaultIcon;
+    }
+}
 
 var registry = module.exports = {
     init: init,
@@ -548,6 +619,7 @@ var registry = module.exports = {
     enableNodeSet: enableNodeSet,
     disableNodeSet: disableNodeSet,
 
+    setModulePendingUpdated: setModulePendingUpdated,
     removeModule: removeModule,
 
     getNodeInfo: getNodeInfo,
@@ -556,6 +628,7 @@ var registry = module.exports = {
     getModuleList: getModuleList,
     getModuleInfo: getModuleInfo,
 
+    getNodeIconPath: getNodeIconPath,
     /**
      * Gets all of the node template configs
      * @return all of the node templates in a single string

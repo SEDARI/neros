@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 IBM, Antoine Aflalo
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,6 +84,7 @@ RED.settings = (function () {
                     if (auth_tokens) {
                         jqXHR.setRequestHeader("Authorization","Bearer "+auth_tokens.access_token);
                     }
+                    jqXHR.setRequestHeader("Node-RED-API-Version","v2");
                 }
             }
         });
@@ -101,7 +102,7 @@ RED.settings = (function () {
             url: 'settings',
             success: function (data) {
                 setProperties(data);
-                if (RED.settings.user && RED.settings.user.anonymous) {
+                if (!RED.settings.user || RED.settings.user.anonymous) {
                     RED.settings.remove("auth-tokens");
                 }
                 console.log("Node-RED: " + data.version);

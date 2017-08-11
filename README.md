@@ -1,16 +1,16 @@
 # NEROS
 
+<<<<<<< HEAD
 A Node-RED fork serving the IoT more securely. A visual tool for wiring the Internet of Things securely.
 
 ## Authors
 
-NEROS is based on Node-RED which is a creation of [IBM Emerging Technology](https://www.ibm.com/blogs/emerging-technology/).
+NEROS is based on Node-RED which is a project of the [JS Foundation](http://js.foundation).
 
-* Nick O'Leary [@knolleary](http://twitter.com/knolleary)
-* Dave Conway-Jones [@ceejay](http://twitter.com/ceejay)
+It was created by [IBM Emerging Technology](https://www.ibm.com/blogs/emerging-technology/).
 
 ## Copyright and license
 
-Additions made to Node-RED are Copyright 2016 FORSEC project.
+Copyright JS Foundation and other contributors, http://js.foundation under [the Apache 2.0 license](LICENSE).
 
-All Node-RED Code is Copyright 2013, 2016 IBM Corp. under [the Apache 2.0 license](LICENSE).
+Additions made to Node-RED are Copyright 2016 FORSEC project.

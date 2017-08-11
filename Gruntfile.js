@@ -1,5 +1,5 @@
 /**
- * Copyright 2013, 2015 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,17 @@ module.exports = function(grunt) {
             all: { src: ['test/**/*_spec.js'] },
             core: { src: ["test/_spec.js","test/red/**/*_spec.js"]},
             nodes: { src: ["test/nodes/**/*_spec.js"]}
+        },
+        mocha_istanbul: {
+            options: {
+                globals: ['expect'],
+                timeout: 3000,
+                ignoreLeaks: false,
+                ui: 'bdd',
+                reportFormats: ['lcov'],
+                print: 'both'
+            },
+            coverage: { src: ['test/**/*_spec.js'] }
         },
         jshint: {
             options: {
@@ -98,36 +109,49 @@ module.exports = function(grunt) {
                 src: [
                     // Ensure editor source files are concatenated in
                     // the right order
-                    "editor/js/main.js",
+                    "editor/js/red.js",
                     "editor/js/events.js",
                     "editor/js/i18n.js",
                     "editor/js/settings.js",
                     "editor/js/user.js",
                     "editor/js/comms.js",
+                    "editor/js/text/bidi.js",
+                    "editor/js/text/format.js",
                     "editor/js/ui/state.js",
                     "editor/js/nodes.js",
                     "editor/js/history.js",
                     "editor/js/validators.js",
+                    "editor/js/ui/utils.js",
+                    "editor/js/ui/common/editableList.js",
+                    "editor/js/ui/common/checkboxSet.js",
+                    "editor/js/ui/common/menu.js",
+                    "editor/js/ui/common/panels.js",
+                    "editor/js/ui/common/popover.js",
+                    "editor/js/ui/common/searchBox.js",
+                    "editor/js/ui/common/tabs.js",
+                    "editor/js/ui/common/stack.js",
+                    "editor/js/ui/common/typedInput.js",
+                    "editor/js/ui/actions.js",
                     "editor/js/ui/deploy.js",
-                    "editor/js/ui/menu.js",
+                    "editor/js/ui/diff.js",
                     "editor/js/ui/keyboard.js",
-                    "editor/js/ui/tabs.js",
-                    "editor/js/ui/popover.js",
                     "editor/js/ui/workspaces.js",
                     "editor/js/ui/view.js",
                     "editor/js/ui/sidebar.js",
                     "editor/js/ui/palette.js",
                     "editor/js/ui/tab-info.js",
                     "editor/js/ui/tab-config.js",
+                    "editor/js/ui/palette-editor.js",
                     "editor/js/ui/editor.js",
                     "editor/js/ui/tray.js",
                     "editor/js/ui/clipboard.js",
                     "editor/js/ui/library.js",
                     "editor/js/ui/notifications.js",
+                    "editor/js/ui/search.js",
+                    "editor/js/ui/typeSearch.js",
                     "editor/js/ui/subflow.js",
-                    "editor/js/ui/touch/radialMenu.js",
-                    "editor/js/ui/typedInput.js",
-                    "editor/js/ui/editableList.js"
+                    "editor/js/ui/userSettings.js",
+                    "editor/js/ui/touch/radialMenu.js"
                 ],
                 dest: "public/red/red.js"
             },
@@ -145,6 +169,14 @@ module.exports = function(grunt) {
                     "public/vendor/vendor.css": [
                         // TODO: resolve relative resource paths in
                         //       bootstrap/FA/jquery
+                    ],
+                    "public/vendor/jsonata/jsonata.min.js": [
+                        "node_modules/jsonata/jsonata-es5.min.js",
+                        "editor/vendor/jsonata/formatter.js"
+                    ],
+                    "public/vendor/ace/worker-jsonata.js": [
+                        "node_modules/jsonata/jsonata-es5.min.js",
+                        "editor/vendor/jsonata/worker-jsonata.js"
                     ]
                 }
             }
@@ -152,7 +184,10 @@ module.exports = function(grunt) {
         uglify: {
             build: {
                 files: {
-                    'public/red/red.min.js': 'public/red/red.js'
+                    'public/red/red.min.js': 'public/red/red.js',
+                    'public/red/main.min.js': 'public/red/main.js',
+                    'public/vendor/ace/mode-jsonata.js': 'editor/vendor/jsonata/mode-jsonata.js',
+                    'public/vendor/ace/snippets/jsonata.js': 'editor/vendor/jsonata/snippets-jsonata.js'
                 }
             }
         },
@@ -178,12 +213,18 @@ module.exports = function(grunt) {
                     'red/api/locales/en-US/editor.json',
                     'red/runtime/locales/en-US/runtime.json'
                 ]
+            },
+            keymaps: {
+                src: [
+                    'editor/js/keymap.json'
+                ]
             }
         },
         attachCopyright: {
             js: {
                 src: [
-                    'public/red/red.min.js'
+                    'public/red/red.min.js',
+                    'public/red/main.min.js'
                 ]
             },
             css: {
@@ -213,7 +254,7 @@ module.exports = function(grunt) {
                 files: [
                     'editor/js/**/*.js'
                 ],
-                tasks: ['concat','uglify','attachCopyright:js']
+                tasks: ['copy:build','concat','uglify','attachCopyright:js']
             },
             sass: {
                 files: [
@@ -228,6 +269,12 @@ module.exports = function(grunt) {
                     'red/runtime/locales/en-US/runtime.json'
                 ],
                 tasks: ['jsonlint:messages']
+            },
+            keymaps: {
+                files: [
+                    'editor/js/keymap.json'
+                ],
+                tasks: ['jsonlint:keymaps','copy:build']
             },
             misc: {
                 files: [
@@ -262,40 +309,49 @@ module.exports = function(grunt) {
 
         copy: {
             build: {
-                files:[{
-                    cwd: 'editor/images',
-                    src: '**',
-                    expand: true,
-                    dest: 'public/red/images/'
-                },
-                {
-                    cwd: 'editor/vendor',
-                    src: [
-                        'ace/**',
-                        //'bootstrap/css/**',
-                        'bootstrap/img/**',
-                        'jquery/css/**',
-                        'font-awesome/**'
-                    ],
-                    expand: true,
-                    dest: 'public/vendor/'
-                },
-                {
-                    cwd: 'editor/icons',
-                    src: '**',
-                    expand: true,
-                    dest: 'public/icons/'
-                },
-                {
-                    expand: true,
-                    src: ['editor/index.html','editor/favicon.ico'],
-                    dest: 'public/',
-                    flatten: true
-                },
-                {
-                    src: 'CHANGELOG.md',
-                    dest: 'public/red/about'
-                }
+                files:[
+                    {
+                        src: 'editor/js/main.js',
+                        dest: 'public/red/main.js'
+                    },
+                    {
+                        src: 'editor/js/keymap.json',
+                        dest: 'public/red/keymap.json'
+                    },
+                    {
+                        cwd: 'editor/images',
+                        src: '**',
+                        expand: true,
+                        dest: 'public/red/images/'
+                    },
+                    {
+                        cwd: 'editor/vendor',
+                        src: [
+                            'ace/**',
+                            //'bootstrap/css/**',
+                            'bootstrap/img/**',
+                            'jquery/css/**',
+                            'font-awesome/**'
+                        ],
+                        expand: true,
+                        dest: 'public/vendor/'
+                    },
+                    {
+                        cwd: 'editor/icons',
+                        src: '**',
+                        expand: true,
+                        dest: 'public/icons/'
+                    },
+                    {
+                        expand: true,
+                        src: ['editor/index.html','editor/favicon.ico'],
+                        dest: 'public/',
+                        flatten: true
+                    },
+                    {
+                        src: 'CHANGELOG.md',
+                        dest: 'public/red/about'
+                    }
                 ]
             },
             release: {
@@ -356,11 +412,12 @@ module.exports = function(grunt) {
     grunt.loadNpmTasks('grunt-contrib-copy');
     grunt.loadNpmTasks('grunt-chmod');
     grunt.loadNpmTasks('grunt-jsonlint');
+    grunt.loadNpmTasks('grunt-mocha-istanbul');
 
     grunt.registerMultiTask('attachCopyright', function() {
         var files = this.data.src;
         var copyright = "/**\n"+
-            " * Copyright 2013, 2015 IBM Corp.\n"+
+            " * Copyright JS Foundation and other contributors, http://js.foundation\n"+
             " *\n"+
             " * Licensed under the Apache License, Version 2.0 (the \"License\");\n"+
             " * you may not use this file except in compliance with the License.\n"+
@@ -376,7 +433,7 @@ module.exports = function(grunt) {
             " **/\n";
 
         if (files) {
-            for (var i=0;i<files.length;i++) {
+            for (var i=0; i<files.length; i++) {
                 var file = files[i];
                 if (!grunt.file.exists(file)) {
                     grunt.log.warn('File '+ file + ' not found');
@@ -421,7 +478,7 @@ module.exports = function(grunt) {
 
     grunt.registerTask('build',
         'Builds editor content',
-        ['clean:build','concat:build','concat:vendor','uglify:build','sass:build','jsonlint:messages','copy:build','attachCopyright']);
+        ['clean:build','jsonlint','concat:build','concat:vendor','copy:build','uglify:build','sass:build','attachCopyright']);
 
     grunt.registerTask('dev',
         'Developer mode: run node-red, watch for source changes and build/restart',
@@ -431,4 +488,7 @@ module.exports = function(grunt) {
         'Create distribution zip file',
         ['build','clean:release','copy:release','chmod:release','compress:release']);
 
+    grunt.registerTask('coverage',
+        'Run Istanbul code test coverage task',
+        ['build','mocha_istanbul']);
 };

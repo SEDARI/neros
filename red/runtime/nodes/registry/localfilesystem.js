@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,19 @@ function init(runtime) {
     i18n = runtime.i18n;
 }
 
+function isIncluded(name) {
+    if (settings.nodesIncludes) {
+        for (var i=0;i<settings.nodesIncludes.length;i++) {
+            if (settings.nodesIncludes[i] == name) {
+                return true;
+            }
+        }
+    } else {
+        return true;
+    }
+    return false;
+}
+
 function isExcluded(name) {
      if (settings.nodesExcludes) {
         for (var i=0;i<settings.nodesExcludes.length;i++) {
@@ -43,7 +56,7 @@ function isExcluded(name) {
     return false;
 }
 function getLocalFile(file) {
-    if (isExcluded(path.basename(file))) {
+    if (!isIncluded(path.basename(file)) || isExcluded(path.basename(file))) {
         return null;
     }
     try {
@@ -67,6 +80,8 @@ function getLocalFile(file) {
  * @return an array of fully-qualified paths to .js files
  */
 function getLocalNodeFiles(dir) {
+    dir = path.resolve(dir);
+
     var result = [];
     var files = [];
     try {
@@ -89,7 +104,7 @@ function getLocalNodeFiles(dir) {
             if (!/^(\..*|lib|icons|node_modules|test|locales)$/.test(fn)) {
                 result = result.concat(getLocalNodeFiles(path.join(dir,fn)));
             } else if (fn === "icons") {
-                events.emit("node-icon-dir",path.join(dir,fn));
+                events.emit("node-icon-dir",{name:'node-red',path:path.join(dir,fn)});
             }
         }
     });
@@ -105,7 +120,7 @@ function scanDirForNodesModules(dir,moduleName) {
             if (/^@/.test(fn)) {
                 results = results.concat(scanDirForNodesModules(path.join(dir,fn),moduleName));
             } else {
-                if (!isExcluded(fn) && (!moduleName || fn == moduleName)) {
+                if (isIncluded(fn) && !isExcluded(fn) && (!moduleName || fn == moduleName)) {
                     var pkgfn = path.join(dir,fn,"package.json");
                     try {
                         var pkg = require(pkgfn);
@@ -141,7 +156,8 @@ function scanTreeForNodesModules(moduleName) {
 
     if (settings.userDir) {
         userDir = path.join(settings.userDir,"node_modules");
-        results = results.concat(scanDirForNodesModules(userDir,moduleName));
+        results = scanDirForNodesModules(userDir,moduleName);
+        results.forEach(function(r) { r.local = true; });
     }
 
     if (dir) {
@@ -181,7 +197,7 @@ function getModuleNodeFiles(module) {
             if (iconDirs.indexOf(iconDir) == -1) {
                 try {
                     fs.statSync(iconDir);
-                    events.emit("node-icon-dir",iconDir);
+                    events.emit("node-icon-dir",{name:pkg.name,path:iconDir});
                     iconDirs.push(iconDir);
                 } catch(err) {
                 }
@@ -204,7 +220,7 @@ function getNodeFiles(disableNodePathScan) {
 
     if (settings.coreNodesDir) {
         nodeFiles = getLocalNodeFiles(path.resolve(settings.coreNodesDir));
-        var defaultLocalesPath = path.resolve(path.join(settings.coreNodesDir,"core","locales"));
+        var defaultLocalesPath = path.join(settings.coreNodesDir,"core","locales");
         i18n.registerMessageCatalog("node-red",defaultLocalesPath,"messages.json");
     }
 
@@ -240,12 +256,14 @@ function getNodeFiles(disableNodePathScan) {
             nodeList[moduleFile.package.name] = {
                 name: moduleFile.package.name,
                 version: moduleFile.package.version,
+                local: moduleFile.local||false,
                 nodes: {}
             };
             if (moduleFile.package['node-red'].version) {
                 nodeList[moduleFile.package.name].redVersion = moduleFile.package['node-red'].version;
             }
             nodeModuleFiles.forEach(function(node) {
+                node.local = moduleFile.local||false;
                 nodeList[moduleFile.package.name].nodes[node.name] = node;
             });
             nodeFiles = nodeFiles.concat(nodeModuleFiles);
@@ -278,6 +296,7 @@ function getModuleFiles(module) {
         }
         nodeModuleFiles.forEach(function(node) {
             nodeList[moduleFile.package.name].nodes[node.name] = node;
+            nodeList[moduleFile.package.name].nodes[node.name].local = moduleFile.local || false;
         });
     });
     return nodeList;

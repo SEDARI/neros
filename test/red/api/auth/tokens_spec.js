@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ describe("Tokens", function() {
                             Tokens.get("1234").then(function(token) {
                                 try {
                                     should.not.exist(token);
-                                    saveSessions.calledOnce.should.be.true;
+                                    saveSessions.calledOnce.should.be.true();
                                     done();
                                 } catch(err) {
                                     done(err);

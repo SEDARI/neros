@@ -1,18 +1,3 @@
-/**
- * Copyright 2013,2016 IBM Corp.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
 
 module.exports = function(RED) {
     "use strict";
@@ -23,9 +8,9 @@ module.exports = function(RED) {
     var gpioCommand = __dirname+'/nrgpio';
 
     try {
-        fs.statSync("/dev/ttyAMA0"); // unlikely if not on a Pi
+        var cpuinfo = fs.readFileSync("/proc/cpuinfo").toString();
+        if (cpuinfo.indexOf(": BCM") === -1) { throw "Info : "+RED._("rpi-gpio.errors.ignorenode"); }
     } catch(err) {
-        //RED.log.info(RED._("rpi-gpio.errors.ignorenode"));
         throw "Info : "+RED._("rpi-gpio.errors.ignorenode");
     }
 
@@ -37,8 +22,13 @@ module.exports = function(RED) {
             fs.statSync("/usr/lib/python2.7/site-packages/RPi/GPIO"); // test on Arch
         }
         catch(err) {
-            RED.log.warn(RED._("rpi-gpio.errors.libnotfound"));
-            throw "Warning : "+RED._("rpi-gpio.errors.libnotfound");
+            try {
+                fs.statSync("/usr/lib/python2.7/dist-packages/RPi/GPIO"); // test on Hypriot
+            }
+            catch(err) {
+                RED.log.warn(RED._("rpi-gpio.errors.libnotfound"));
+                throw "Warning : "+RED._("rpi-gpio.errors.libnotfound");
+            }
         }
     }
 
@@ -77,14 +67,15 @@ module.exports = function(RED) {
             node.status({fill:"green",shape:"dot",text:"common.status.ok"});
 
             node.child.stdout.on('data', function (data) {
-                data = data.toString().trim();
-                if (data.length > 0) {
-                    if (node.running && node.buttonState !== -1) {
-                        node.send({ topic:"pi/"+node.pin, payload:Number(data) });
+                var d = data.toString().trim().split("\n");
+                for (var i = 0; i < d.length; i++) {
+                    if (d[i] === '') { return; }
+                    if (node.running && node.buttonState !== -1 && !isNaN(Number(d[i])) && node.buttonState !== d[i]) {
+                        node.send({ topic:"pi/"+node.pin, payload:Number(d[i]) });
                     }
-                    node.buttonState = data;
-                    node.status({fill:"green",shape:"dot",text:data});
-                    if (RED.settings.verbose) { node.log("out: "+data+" :"); }
+                    node.buttonState = d[i];
+                    node.status({fill:"green",shape:"dot",text:d[i]});
+                    if (RED.settings.verbose) { node.log("out: "+d[i]+" :"); }
                 }
             });
 
@@ -132,6 +123,7 @@ module.exports = function(RED) {
         this.pin = n.pin;
         this.set = n.set || false;
         this.level = n.level || 0;
+        this.freq = n.freq || 100;
         this.out = n.out || "out";
         var node = this;
         if (!pinsInUse.hasOwnProperty(this.pin)) {
@@ -168,7 +160,7 @@ module.exports = function(RED) {
                 node.child = spawn(gpioCommand, [node.out,node.pin,node.level]);
                 node.status({fill:"green",shape:"dot",text:node.level});
             } else {
-                node.child = spawn(gpioCommand, [node.out,node.pin]);
+                node.child = spawn(gpioCommand, [node.out,node.pin,node.freq]);
                 node.status({fill:"green",shape:"dot",text:"common.status.ok"});
             }
             node.running = true;
@@ -229,8 +221,8 @@ module.exports = function(RED) {
 
         node.child.stdout.on('data', function (data) {
             data = Number(data);
-            if (data === 0) { node.send({ topic:"pi/mouse", button:data, payload:0 }); }
-            else { node.send({ topic:"pi/mouse", button:data, payload:1 }); }
+            if (data === 1) { node.send({ topic:"pi/mouse", button:data, payload:1 }); }
+            else { node.send({ topic:"pi/mouse", button:data, payload:0 }); }
         });
 
         node.child.stderr.on('data', function (data) {

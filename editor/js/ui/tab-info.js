@@ -1,5 +1,5 @@
 /**
- * Copyright 2013, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,15 +26,57 @@ RED.sidebar.info = (function() {
         smartypants: false
     });
 
-    var content = document.createElement("div");
-    content.style.paddingTop = "4px";
-    content.style.paddingLeft = "4px";
-    content.style.paddingRight = "4px";
-    content.className = "sidebar-node-info"
+    var content;
+    var sections;
+    var nodeSection;
+    var infoSection;
+    var tipBox;
 
-    var propertiesExpanded = false;
+    var expandedSections = {
+        "property": false
+    };
 
     function init() {
+
+        content = document.createElement("div");
+        content.className = "sidebar-node-info"
+
+        RED.actions.add("core:show-info-tab",show);
+
+        var stackContainer = $("<div>",{class:"sidebar-node-info-stack"}).appendTo(content);
+
+        sections = RED.stack.create({
+            container: stackContainer
+        }).hide();
+
+        nodeSection = sections.add({
+            title: RED._("sidebar.info.node"),
+            collapsible: false
+        });
+        infoSection = sections.add({
+            title: RED._("sidebar.info.information"),
+            collapsible: false
+        });
+        infoSection.content.css("padding","6px");
+        infoSection.container.css("border-bottom","none");
+
+        var tipContainer = $('<div class="node-info-tips"></div>').appendTo(content);
+        tipBox = $('<div class="node-info-tip"></div>').appendTo(tipContainer);
+        var tipButtons = $('<div class="node-info-tips-buttons"></div>').appendTo(tipContainer);
+
+        var tipRefresh = $('<a href="#" class="workspace-footer-button"><i class="fa fa-refresh"></a>').appendTo(tipButtons);
+        tipRefresh.click(function(e) {
+            e.preventDefault();
+            tips.next();
+        })
+
+        var tipClose = $('<a href="#" class="workspace-footer-button"><i class="fa fa-times"></a>').appendTo(tipButtons);
+        tipClose.click(function(e) {
+            e.preventDefault();
+            RED.actions.invoke("core:toggle-show-tips");
+            RED.notify(RED._("sidebar.info.showTips"));
+        });
+
         RED.sidebar.addTab({
             id: "info",
             label: RED._("sidebar.info.label"),
@@ -42,6 +84,11 @@ RED.sidebar.info = (function() {
             content: content,
             enableOnEdit: true
         });
+        if (tips.enabled()) {
+            tips.start();
+        } else {
+            tips.stop();
+        }
 
     }
 
@@ -66,117 +113,249 @@ RED.sidebar.info = (function() {
         return value;
     }
 
-    function refresh(node) {
-        var table = '<table class="node-info"><tbody>';
-        table += '<tr class="blank"><td colspan="2">'+RED._("sidebar.info.node")+'</td></tr>';
-        if (node.type != "subflow" && node.name) {
-            table += "<tr><td>"+RED._("common.label.name")+"</td><td>&nbsp;"+node.name+"</td></tr>";
-        }
-        table += "<tr><td>"+RED._("sidebar.info.type")+"</td><td>&nbsp;"+node.type+"</td></tr>";
-        table += "<tr><td>"+RED._("sidebar.info.id")+"</td><td>&nbsp;"+node.id+"</td></tr>";
-
-        var m = /^subflow(:(.+))?$/.exec(node.type);
-        var subflowNode;
-        if (m) {
-            if (m[2]) {
-                subflowNode = RED.nodes.subflow(m[2]);
-            } else {
-                subflowNode = node;
+    function addTargetToExternalLinks(el) {
+        $(el).find("a").each(function(el) {
+            var href = $(this).attr('href');
+            if (/^https?:/.test(href)) {
+                $(this).attr('target','_blank');
             }
+        });
+        return el;
+    }
+    function refresh(node) {
+        sections.show();
+        $(nodeSection.content).empty();
+        $(infoSection.content).empty();
 
-            table += '<tr class="blank"><td colspan="2">'+RED._("sidebar.info.subflow")+'</td></tr>';
+        var table = $('<table class="node-info"></table>');
+        var tableBody = $('<tbody>').appendTo(table);
+        var propRow;
+        var subflowNode;
+        if (node.type === "tab") {
+            nodeSection.title.html(RED._("sidebar.info.flow"));
+            propRow = $('<tr class="node-info-node-row"><td>'+RED._("sidebar.info.tabName")+'</td><td></td></tr>').appendTo(tableBody);
+            $(propRow.children()[1]).html('&nbsp;'+(node.label||""))
+            propRow = $('<tr class="node-info-node-row"><td>'+RED._("sidebar.info.id")+"</td><td></td></tr>").appendTo(tableBody);
+            RED.utils.createObjectElement(node.id).appendTo(propRow.children()[1]);
+            propRow = $('<tr class="node-info-node-row"><td>'+RED._("sidebar.info.status")+'</td><td></td></tr>').appendTo(tableBody);
+            $(propRow.children()[1]).html((!!!node.disabled)?RED._("sidebar.info.enabled"):RED._("sidebar.info.disabled"))
+        } else {
+            nodeSection.title.html(RED._("sidebar.info.node"));
+            if (node.type !== "subflow" && node.name) {
+                $('<tr class="node-info-node-row"><td>'+RED._("common.label.name")+'</td><td>&nbsp;<span class="bidiAware" dir="'+RED.text.bidi.resolveBaseTextDir(node.name)+'">'+node.name+'</span></td></tr>').appendTo(tableBody);
+            }
+            $('<tr class="node-info-node-row"><td>'+RED._("sidebar.info.type")+"</td><td>&nbsp;"+node.type+"</td></tr>").appendTo(tableBody);
+            propRow = $('<tr class="node-info-node-row"><td>'+RED._("sidebar.info.id")+"</td><td></td></tr>").appendTo(tableBody);
+            RED.utils.createObjectElement(node.id).appendTo(propRow.children()[1]);
 
-            var userCount = 0;
-            var subflowType = "subflow:"+subflowNode.id;
-            RED.nodes.eachNode(function(n) {
-                if (n.type === subflowType) {
-                    userCount++;
-                }
-            });
-            table += "<tr><td>"+RED._("common.label.name")+"</td><td>"+subflowNode.name+"</td></tr>";
-            table += "<tr><td>"+RED._("sidebar.info.instances")+"</td><td>"+userCount+"</td></tr>";
-        }
+            var m = /^subflow(:(.+))?$/.exec(node.type);
 
-        if (!m && node.type != "subflow" && node.type != "comment") {
-            table += '<tr class="blank"><td colspan="2"><a href="#" class="node-info-property-header"><i style="width: 10px; text-align: center;" class="fa fa-caret-'+(propertiesExpanded?"down":"right")+'"></i> '+RED._("sidebar.info.properties")+'</a></td></tr>';
-            if (node._def) {
-                for (var n in node._def.defaults) {
-                    if (n != "name" && node._def.defaults.hasOwnProperty(n)) {
-                        var val = node[n];
-                        var type = typeof val;
-                        if (val === null || val === undefined) {
-                            val = '<span style="font-style: italic; color: #ccc;">'+RED._("sidebar.info.null")+'</span>';
-                        } else if (type === "string") {
-                            if (val.length === 0) {
-                                val = '<span style="font-style: italic; color: #ccc;">'+RED._("sidebar.info.blank")+'</span>';
-                            } else {
-                                if (val.length > 30) {
-                                    val = val.substring(0,30)+" ...";
+            if (!m && node.type != "subflow" && node.type != "comment") {
+                if (node._def) {
+                    var count = 0;
+                    var defaults = node._def.defaults;
+                    for (var n in defaults) {
+                        if (n != "name" && defaults.hasOwnProperty(n)) {
+                            var val = node[n];
+                            var type = typeof val;
+                            count++;
+                            propRow = $('<tr class="node-info-property-row'+(expandedSections.property?"":" hide")+'"><td>'+n+"</td><td></td></tr>").appendTo(tableBody);
+                            if (defaults[n].type) {
+                                var configNode = RED.nodes.node(val);
+                                if (!configNode) {
+                                    RED.utils.createObjectElement(undefined).appendTo(propRow.children()[1]);
+                                } else {
+                                    var configLabel = RED.utils.getNodeLabel(configNode,val);
+                                    var container = propRow.children()[1];
+
+                                    var div = $('<span>',{class:""}).appendTo(container);
+                                    var nodeDiv = $('<div>',{class:"palette_node palette_node_small"}).appendTo(div);
+                                    var colour = configNode._def.color;
+                                    var icon_url = RED.utils.getNodeIcon(configNode._def);
+                                    nodeDiv.css({'backgroundColor':colour, "cursor":"pointer"});
+                                    var iconContainer = $('<div/>',{class:"palette_icon_container"}).appendTo(nodeDiv);
+                                    $('<div/>',{class:"palette_icon",style:"background-image: url("+icon_url+")"}).appendTo(iconContainer);
+                                    var nodeContainer = $('<span></span>').css({"verticalAlign":"top","marginLeft":"6px"}).html(configLabel).appendTo(container);
+
+                                    nodeDiv.on('dblclick',function() {
+                                        RED.editor.editConfig("", configNode.type, configNode.id);
+                                    })
+
                                 }
-                                val = val.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+                            } else {
+                                RED.utils.createObjectElement(val).appendTo(propRow.children()[1]);
                             }
-                        } else if (type === "number") {
-                            val = val.toString();
-                        } else if ($.isArray(val)) {
-                            val = "[<br/>";
-                            for (var i=0;i<Math.min(node[n].length,10);i++) {
-                                var vv = JSON.stringify(node[n][i],jsonFilter," ").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-                                val += "&nbsp;"+i+": "+vv+"<br/>";
-                            }
-                            if (node[n].length > 10) {
-                                val += "&nbsp;... "+RED._("sidebar.info.arrayItems",{count:node[n].length})+"<br/>";
-                            }
-                            val += "]";
-                        } else {
-                            val = JSON.stringify(val,jsonFilter," ");
-                            val = val.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
                         }
-
-                        table += '<tr class="node-info-property-row'+(propertiesExpanded?"":" hide")+'"><td>'+n+"</td><td>"+val+"</td></tr>";
+                    }
+                    if (count > 0) {
+                        $('<tr class="node-info-property-expand blank"><td colspan="2"><a href="#" class=" node-info-property-header'+(expandedSections.property?" expanded":"")+'"><span class="node-info-property-show-more">'+RED._("sidebar.info.showMore")+'</span><span class="node-info-property-show-less">'+RED._("sidebar.info.showLess")+'</span> <i class="fa fa-caret-down"></i></a></td></tr>').appendTo(tableBody);
                     }
                 }
             }
+
+            if (m) {
+                if (m[2]) {
+                    subflowNode = RED.nodes.subflow(m[2]);
+                } else {
+                    subflowNode = node;
+                }
+
+                $('<tr class="blank"><th colspan="2">'+RED._("sidebar.info.subflow")+'</th></tr>').appendTo(tableBody);
+
+                var userCount = 0;
+                var subflowType = "subflow:"+subflowNode.id;
+                RED.nodes.eachNode(function(n) {
+                    if (n.type === subflowType) {
+                        userCount++;
+                    }
+                });
+                $('<tr class="node-info-subflow-row"><td>'+RED._("common.label.name")+'</td><td><span class="bidiAware" dir=\"'+RED.text.bidi.resolveBaseTextDir(subflowNode.name)+'">'+subflowNode.name+'</span></td></tr>').appendTo(tableBody);
+                $('<tr class="node-info-subflow-row"><td>'+RED._("sidebar.info.instances")+"</td><td>"+userCount+'</td></tr>').appendTo(tableBody);
+            }
         }
-        table += "</tbody></table><hr/>";
-        if (!subflowNode && node.type != "comment") {
-            var helpText = $("script[data-help-name$='"+node.type+"']").html()||"";
-            table  += '<div class="node-help">'+helpText+"</div>";
+        $(table).appendTo(nodeSection.content);
+
+        var infoText = "";
+
+        if (!subflowNode && node.type !== "comment" && node.type !== "tab") {
+            var helpText = $("script[data-help-name='"+node.type+"']").html()||"";
+            infoText = helpText;
+        } else if (node.type === "tab") {
+            infoText = marked(node.info||"");
         }
+
         if (subflowNode) {
-            table += '<div class="node-help">'+marked(subflowNode.info||"")+'</div>';
+            infoText = infoText + marked(subflowNode.info||"");
         } else if (node._def && node._def.info) {
             var info = node._def.info;
-            table += '<div class="node-help">'+marked(typeof info === "function" ? info.call(node) : info)+'</div>';
-            //table += '<div class="node-help">'+(typeof info === "function" ? info.call(node) : info)+'</div>';
+            var textInfo = (typeof info === "function" ? info.call(node) : info);
+            // TODO: help
+            infoText = infoText + marked(textInfo);
+        }
+        if (infoText) {
+            setInfoText(infoText);
         }
 
-        $(content).html(table);
 
         $(".node-info-property-header").click(function(e) {
-            var icon = $(this).find("i");
-            if (icon.hasClass("fa-caret-right")) {
-                icon.removeClass("fa-caret-right");
-                icon.addClass("fa-caret-down");
-                $(".node-info-property-row").show();
-                propertiesExpanded = true;
-            } else {
-                icon.addClass("fa-caret-right");
-                icon.removeClass("fa-caret-down");
-                $(".node-info-property-row").hide();
-                propertiesExpanded = false;
-            }
-
             e.preventDefault();
+            expandedSections["property"] = !expandedSections["property"];
+            $(this).toggleClass("expanded",expandedSections["property"]);
+            $(".node-info-property-row").toggle(expandedSections["property"]);
         });
     }
+    function setInfoText(infoText) {
+        var info = addTargetToExternalLinks($('<div class="node-help"><span class="bidiAware" dir=\"'+RED.text.bidi.resolveBaseTextDir(infoText)+'">'+infoText+'</span></div>')).appendTo(infoSection.content);
+        info.find(".bidiAware").contents().filter(function() { return this.nodeType === 3 && this.textContent.trim() !== "" }).wrap( "<span></span>" );
+        var foldingHeader = "H3";
+        info.find(foldingHeader).wrapInner('<a class="node-info-header expanded" href="#"></a>')
+            .find("a").prepend('<i class="fa fa-angle-right">').click(function(e) {
+                e.preventDefault();
+                var isExpanded = $(this).hasClass('expanded');
+                var el = $(this).parent().next();
+                while(el.length === 1 && el[0].nodeName !== foldingHeader) {
+                    el.toggle(!isExpanded);
+                    el = el.next();
+                }
+                $(this).toggleClass('expanded',!isExpanded);
+            })
+    }
+    var tips = (function() {
+        var enabled = true;
+        var startDelay = 1000;
+        var cycleDelay = 15000;
+        var startTimeout;
+        var refreshTimeout;
+        var tipCount = -1;
+
+        RED.actions.add("core:toggle-show-tips",function(state) {
+            if (state === undefined) {
+                RED.userSettings.toggle("view-show-tips");
+            } else {
+                enabled = state;
+                if (enabled) {
+                    startTips();
+                } else {
+                    stopTips();
+                }
+            }
+        });
+
+        function setTip() {
+            var r = Math.floor(Math.random() * tipCount);
+            var tip = RED._("infotips:info.tip"+r);
+
+            var m;
+            while ((m=/({{(.*?)}})/.exec(tip))) {
+                var shortcut = RED.keyboard.getShortcut(m[2]);
+                if (shortcut) {
+                    tip = tip.replace(m[1],RED.keyboard.formatKey(shortcut.key));
+                } else {
+                    return;
+                }
+            }
+            while ((m=/(\[(.*?)\])/.exec(tip))) {
+                tip = tip.replace(m[1],RED.keyboard.formatKey(m[2]));
+            }
+            tipBox.html(tip).fadeIn(200);
+            if (startTimeout) {
+                startTimeout = null;
+                refreshTimeout = setInterval(cycleTips,cycleDelay);
+            }
+        }
+        function cycleTips() {
+            tipBox.fadeOut(300,function() {
+                setTip();
+            })
+        }
+        function startTips() {
+            $(".sidebar-node-info").addClass('show-tips');
+            if (enabled) {
+                if (!startTimeout && !refreshTimeout) {
+                    if (tipCount === -1) {
+                        do {
+                            tipCount++;
+                        } while(RED._("infotips:info.tip"+tipCount)!=="infotips:info.tip"+tipCount);
+                    }
+                    startTimeout = setTimeout(setTip,startDelay);
+                }
+            }
+        }
+        function stopTips() {
+            $(".sidebar-node-info").removeClass('show-tips');
+            clearInterval(refreshTimeout);
+            clearTimeout(startTimeout);
+            refreshTimeout = null;
+            startTimeout = null;
+        }
+        function nextTip() {
+            clearInterval(refreshTimeout);
+            startTimeout = true;
+            setTip();
+        }
+        return {
+            start: startTips,
+            stop: stopTips,
+            next: nextTip,
+            enabled: function() { return enabled; }
+        }
+    })();
 
     function clear() {
-        $(content).html("");
+        sections.hide();
+        //
     }
 
     function set(html) {
-        $(content).html(html);
+        // tips.stop();
+        sections.show();
+        nodeSection.container.hide();
+        $(infoSection.content).empty();
+        setInfoText(html);
+        $(".sidebar-node-info-stack").scrollTop(0);
     }
+
+
 
     RED.events.on("view:selection-changed",function(selection) {
         if (selection.nodes) {
@@ -189,11 +368,18 @@ RED.sidebar.info = (function() {
                 }
             }
         } else {
-            var subflow = RED.nodes.subflow(RED.workspaces.active());
-            if (subflow) {
-                refresh(subflow);
+            var activeWS = RED.workspaces.active();
+
+            var flow = RED.nodes.workspace(activeWS) || RED.nodes.subflow(activeWS);
+            if (flow) {
+                refresh(flow);
             } else {
-                clear();
+                var workspace = RED.nodes.workspace(RED.workspaces.active());
+                if (workspace && workspace.info) {
+                    refresh(workspace);
+                } else {
+                    clear();
+                }
             }
         }
     });
@@ -201,7 +387,7 @@ RED.sidebar.info = (function() {
     return {
         init: init,
         show: show,
-        refresh:refresh,
+        refresh: refresh,
         clear: clear,
         set: set
     }

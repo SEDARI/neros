@@ -1,5 +1,5 @@
 /**
- * Copyright 2014, 2015 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ describe('Node', function() {
             n.should.have.property('id','123');
             n.should.have.property('type','abc');
             n.should.not.have.property('name');
-            n.wires.should.be.empty;
+            n.wires.should.be.empty();
         });
 
         it('is called with an id, a type and a name',function() {
@@ -35,7 +35,7 @@ describe('Node', function() {
             n.should.have.property('id','123');
             n.should.have.property('type','abc');
             n.should.have.property('name','barney');
-            n.wires.should.be.empty;
+            n.wires.should.be.empty();
         });
 
         it('is called with an id, a type and some wires',function() {
@@ -63,7 +63,7 @@ describe('Node', function() {
             n.on('close',function(done) {
                 setTimeout(function() {
                     done();
-                },200);
+                },50);
             });
             var p = n.close();
             should.exist(p);
@@ -71,7 +71,22 @@ describe('Node', function() {
                 testdone();
             });
         });
-
+        it('accepts a callback with "removed" and "done" parameters', function(testdone) {
+            var n = new RedNode({id:'123',type:'abc'});
+            var receivedRemoved;
+            n.on('close',function(removed,done) {
+                receivedRemoved = removed;
+                setTimeout(function() {
+                    done();
+                },50);
+            });
+            var p = n.close(true);
+            should.exist(p);
+            (receivedRemoved).should.be.true();
+            p.then(function() {
+                testdone();
+            });
+        })
         it('allows multiple close handlers to be registered',function(testdone) {
             var n = new RedNode({id:'123',type:'abc'});
             var callbacksClosed = 0;
@@ -79,13 +94,13 @@ describe('Node', function() {
                 setTimeout(function() {
                     callbacksClosed++;
                     done();
-                },200);
+                },50);
             });
             n.on('close',function(done) {
                 setTimeout(function() {
                     callbacksClosed++;
                     done();
-                },200);
+                },75);
             });
             n.on('close',function() {
                 callbacksClosed++;
@@ -141,7 +156,7 @@ describe('Node', function() {
                 throw new Error("test error");
             });
             n.receive(message);
-            n.error.called.should.be.true;
+            n.error.called.should.be.true();
             n.error.firstCall.args[1].should.equal(message);
             done();
 
@@ -431,7 +446,7 @@ describe('Node', function() {
             n.error(null,message);
             should.deepEqual({level:Log.ERROR, id:n.id, type:n.type, msg:""}, loginfo);
 
-            flows.handleError.called.should.be.true;
+            flows.handleError.called.should.be.true();
             flows.handleError.args[0][0].should.eql(n);
             flows.handleError.args[0][1].should.eql("");
             flows.handleError.args[0][2].should.eql(message);
@@ -455,7 +470,7 @@ describe('Node', function() {
             n.error("This is an error",message);
             should.deepEqual({level:Log.ERROR, id:n.id, type:n.type, msg:"This is an error"}, loginfo);
 
-            flows.handleError.called.should.be.true;
+            flows.handleError.called.should.be.true();
             flows.handleError.args[0][0].should.eql(n);
             flows.handleError.args[0][1].should.eql("This is an error");
             flows.handleError.args[0][2].should.eql(message);
@@ -492,7 +507,7 @@ describe('Node', function() {
             });
             var msg = {payload:"foo", _msgid:"987654321"};
             var m = n.metric(undefined,msg,"15mb");
-            m.should.be.a.boolean;
+            m.should.be.a.Boolean();
             Log.log.restore();
             done();
         });
@@ -521,7 +536,7 @@ describe('Node', function() {
 
             n.status(status);
 
-            flows.handleStatus.called.should.be.true;
+            flows.handleStatus.called.should.be.true();
             flows.handleStatus.args[0][0].should.eql(n);
             flows.handleStatus.args[0][1].should.eql(status);
             flows.handleStatus.restore();

@@ -1,5 +1,5 @@
 /**
- * Copyright 2014, 2015 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ function init(runtime) {
 
 function load() {
     registry.load();
-    return loader.load();
+    return installer.checkPrereq().then(loader.load);
 }
 
 function addModule(module) {
@@ -70,6 +70,7 @@ module.exports = {
 
     getNodeConfigs: registry.getAllNodeConfigs,
     getNodeConfig: registry.getNodeConfig,
+    getNodeIconPath: registry.getNodeIconPath,
 
     enableNode: enableNodeSet,
     disableNode: registry.disableNodeSet,
@@ -80,5 +81,7 @@ module.exports = {
     installModule: installer.installModule,
     uninstallModule: installer.uninstallModule,
 
-    cleanModuleList: registry.cleanModuleList
+    cleanModuleList: registry.cleanModuleList,
+
+    paletteEditorEnabled: installer.paletteEditorEnabled
 };

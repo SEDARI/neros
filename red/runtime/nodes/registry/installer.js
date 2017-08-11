@@ -1,5 +1,5 @@
 /**
- * Copyright 2015, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ var log = require("../../log");
 var events = require("../../events");
 
 var child_process = require('child_process');
+var npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+var paletteEditorEnabled = false;
 
 var settings;
 
@@ -57,45 +59,63 @@ function checkModulePath(folder) {
     return moduleName;
 }
 
-function checkExistingModule(module) {
-    if (registry.getModuleInfo(module)) {
-        // TODO: nls
-        var err = new Error("Module already loaded");
-        err.code = "module_already_loaded";
-        throw err;
+function checkExistingModule(module,version) {
+    var info = registry.getModuleInfo(module);
+    if (info) {
+        if (!version || info.version === version) {
+            var err = new Error("Module already loaded");
+            err.code = "module_already_loaded";
+            throw err;
+        }
+        return true;
     }
+    return false;
 }
 
-function installModule(module) {
+function installModule(module,version) {
     //TODO: ensure module is 'safe'
     return when.promise(function(resolve,reject) {
         var installName = module;
-
+        var isUpgrade = false;
         try {
             if (moduleRe.test(module)) {
                 // Simple module name - assume it can be npm installed
+                if (version) {
+                    installName += "@"+version;
+                }
             } else if (slashRe.test(module)) {
                 // A path - check if there's a valid package.json
                 installName = module;
                 module = checkModulePath(module);
             }
-            checkExistingModule(module);
+            isUpgrade = checkExistingModule(module,version);
         } catch(err) {
             return reject(err);
         }
-        log.info(log._("server.install.installing",{name: module}));
+        if (!isUpgrade) {
+            log.info(log._("server.install.installing",{name: module,version: version||"latest"}));
+        } else {
+            log.info(log._("server.install.upgrading",{name: module,version: version||"latest"}));
+        }
 
         var installDir = settings.userDir || process.env.NODE_RED_HOME || ".";
-        var child = child_process.execFile('npm',['install','--production',installName],
+        var child = child_process.execFile(npmCommand,['install','--save','--save-prefix="~"','--production',installName],
             {
                 cwd: installDir
             },
             function(err, stdin, stdout) {
                 if (err) {
-                    var lookFor404 = new RegExp(" 404 .*"+installName+"$","m");
+                    var e;
+                    var lookFor404 = new RegExp(" 404 .*"+module+"$","m");
+                    var lookForVersionNotFound = new RegExp("version not found: "+module+"@"+version,"m");
                     if (lookFor404.test(stdout)) {
                         log.warn(log._("server.install.install-failed-not-found",{name:module}));
-                        var e = new Error("Module not found");
+                        e = new Error("Module not found");
+                        e.code = 404;
+                        reject(e);
+                    } else if (isUpgrade && lookForVersionNotFound.test(stdout)) {
+                        log.warn(log._("server.install.upgrade-failed-not-found",{name:module}));
+                        e = new Error("Module not found");
                         e.code = 404;
                         reject(e);
                     } else {
@@ -106,8 +126,14 @@ function installModule(module) {
                         reject(new Error(log._("server.install.install-failed")));
                     }
                 } else {
-                    log.info(log._("server.install.installed",{name:module}));
-                    resolve(require("./index").addModule(module).then(reportAddedModules));
+                    if (!isUpgrade) {
+                        log.info(log._("server.install.installed",{name:module}));
+                        resolve(require("./index").addModule(module).then(reportAddedModules));
+                    } else {
+                        log.info(log._("server.install.upgraded",{name:module, version:version}));
+                        events.emit("runtime-event",{id:"restart-required",payload:{type:"warning",text:"notification.warnings.restartRequired"},retain:true});
+                        resolve(require("./registry").setModulePendingUpdated(module,version));
+                    }
                 }
             }
         );
@@ -160,7 +186,7 @@ function uninstallModule(module) {
 
         var list = registry.removeModule(module);
         log.info(log._("server.install.uninstalling",{name:module}));
-        var child = child_process.execFile('npm',['remove',module],
+        var child = child_process.execFile(npmCommand,['remove','--save',module],
             {
                 cwd: installDir
             },
@@ -183,9 +209,35 @@ function uninstallModule(module) {
     });
 }
 
+function checkPrereq() {
+    if (settings.hasOwnProperty('editorTheme') &&
+        settings.editorTheme.hasOwnProperty('palette') &&
+        settings.editorTheme.palette.hasOwnProperty('editable') &&
+        settings.editorTheme.palette.editable === false
+    ) {
+        log.info(log._("server.palette-editor.disabled"));
+        paletteEditorEnabled = false;
+        return when.resolve();
+    } else {
+        return when.promise(function(resolve) {
+            child_process.execFile(npmCommand,['-v'],function(err) {
+                if (err) {
+                    log.info(log._("server.palette-editor.npm-not-found"));
+                    paletteEditorEnabled = false;
+                } else {
+                    paletteEditorEnabled = true;
+                }
+                resolve();
+            });
+        })
+    }
+}
 module.exports = {
     init: init,
-
+    checkPrereq: checkPrereq,
     installModule: installModule,
-    uninstallModule: uninstallModule
+    uninstallModule: uninstallModule,
+    paletteEditorEnabled: function() {
+        return paletteEditorEnabled
+    }
 }

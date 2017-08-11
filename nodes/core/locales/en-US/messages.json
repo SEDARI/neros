@@ -112,20 +112,36 @@
         "sidebar": {
             "label": "debug",
             "name": "Debug messages",
-            "filterAll": "all flows",
-            "filterCurrent": "current flow"
+            "filterAll": "all nodes",
+            "filterSelected": "selected nodes",
+            "filterCurrent": "current flow",
+            "debugNodes": "Debug nodes",
+            "clearLog": "clear log",
+            "openWindow": "open in new window"
+        },
+        "messageMenu": {
+            "collapseAll": "Collapse all paths",
+            "clearPinned": "Clear pinned paths",
+            "filterNode": "Filter this node",
+            "clearFilter": "Clear filter"
         }
     },
     "link": {
         "linkIn": "link in",
         "linkOut": "link out",
         "label": {
-            "event": "Event name"
+            "event": "Event name",
+            "node": "name",
+            "type": "flow",
+            "sortByFlow":"Sort by flow",
+            "sortByLabel": "Sort by name"
         }
     },
     "tls": {
         "tls": "TLS configuration",
         "label": {
+            "use-local-files": "Use key and certificates from local files",
+            "upload": "Upload",
             "cert": "Certificate",
             "key": "Private Key",
             "ca": "CA Certificate",
@@ -145,13 +161,18 @@
             "command": "Command",
             "append": "Append",
             "timeout": "Timeout",
-            "timeoutplace": "optional"
+            "timeoutplace": "optional",
+            "return": "Output",
+            "seconds": "seconds"
         },
         "placeholder": {
             "extraparams": "extra input parameters"
         },
-        "spawn": "Use spawn() instead of exec()?",
-        "tip": "Tip: <i>spawn</i> expects only one command word - and appended args to be comma separated."
+        "opt": {
+            "exec": "when the command is complete - exec mode",
+            "spawn": "while the command is running - spawn mode"
+        },
+        "oldrc": "Use old style output (compatibility mode)"
     },
     "function": {
         "label": {
@@ -159,7 +180,8 @@
             "outputs": "Outputs"
         },
         "error": {
-            "inputListener":"Cannot add listener to 'input' event within Function"
+            "inputListener":"Cannot add listener to 'input' event within Function",
+            "non-message-returned":"Function tried to send a message of type __type__"
         },
         "tip": "See the Info tab for help writing functions."
     },
@@ -169,19 +191,26 @@
             "property": "Set property",
             "format": "Syntax Highlight",
             "syntax": "Format",
+            "output": "Output as",
             "mustache": "Mustache template",
-            "plain": "Plain text"
+            "plain": "Plain text",
+            "json": "Parsed JSON",
+            "none": "none"
         },
         "templatevalue": "This is the payload: {{payload}} !"
     },
     "delay": {
         "action": "Action",
         "for": "For",
-        "delaymsg": "Delay message",
+        "delaymsg": "Delay each message",
+        "delayfixed": "Fixed delay",
+        "delayvarmsg": "Set delay with msg.delay",
         "randomdelay": "Random delay",
-        "limitrate": "Limit rate to",
-        "fairqueue": "Topic based fair queue",
-        "timedqueue": "Timed release queue",
+        "limitrate": "Rate Limit",
+        "limitall": "All messages",
+        "limittopic": "For each msg.topic",
+        "fairqueue": "Send each topic in turn",
+        "timedqueue": "Send all topics",
         "milisecs": "Miliseconds",
         "secs": "Seconds",
         "sec": "Second",
@@ -192,15 +221,34 @@
         "days": "Days",
         "day": "Day",
         "between": "Between",
+        "and": "&",
         "rate": "Rate",
         "msgper": "msg(s) per",
         "dropmsg": "drop intermediate messages",
         "label": {
             "delay": "delay",
+            "variable": "variable",
             "limit": "limit",
+            "limitTopic": "limit topic",
             "random": "random",
-            "queue": "queue",
-            "timed": "releases per"
+            "units" : {
+                "second": {
+                    "plural" : "Seconds",
+                    "singular": "Second"
+                },
+                "minute": {
+                    "plural" : "Minutes",
+                    "singular": "Minute"
+                },
+                "hour": {
+                    "plural" : "Hours",
+                    "singular": "Hour"
+                },
+                "day": {
+                    "plural" : "Days",
+                    "singular": "Day"
+                }
+            }
         },
         "error": {
             "buffer": "buffer exceeded 1000 messages",
@@ -214,13 +262,14 @@
         "output": {
             "string": "the string",
             "number": "the number",
-            "existing": "the existing msg.payload",
-            "original": "the original msg.payload",
-            "latest": "the latest msg.payload",
+            "existing": "the existing msg object",
+            "original": "the original msg object",
+            "latest": "the latest msg object",
             "nothing": "nothing"
         },
         "wait-reset": "wait to be reset",
         "wait-for": "wait for",
+        "wait-loop": "resend it every",
         "duration": {
             "ms": "Milliseconds",
             "s": "Seconds",
@@ -231,6 +280,7 @@
         "label": {
             "trigger": "trigger",
             "trigger-block": "trigger & block",
+            "trigger-loop": "resend every",
             "reset": "Reset the trigger if:",
             "resetMessage":"msg.reset is set",
             "resetPayload":"msg.payload equals",
@@ -242,7 +292,7 @@
             "title": "Title",
             "body": "Body"
         },
-        "tip": "Tip: The text can be styled as <a href=\"https://help.github.com/articles/markdown-basics/\" target=\"_new\">Github flavoured Markdown</a>"
+        "tip": "Tip: The body text can be styled as <a href=\"https://help.github.com/articles/markdown-basics/\" target=\"_blank\">Github flavoured Markdown</a>"
     },
     "unknown": {
         "label": {
@@ -253,6 +303,7 @@
     "mqtt": {
         "label": {
             "broker": "Server",
+            "example": "e.g. localhost",
             "qos": "QoS",
             "clientid": "Client ID",
             "port": "Port",
@@ -296,7 +347,11 @@
             "method": "Method",
             "url": "URL",
             "doc": "Docs",
-            "return": "Return"
+            "return": "Return",
+            "upload": "Accept file uploads?",
+            "status": "Status code",
+            "headers": "Headers",
+            "other": "other"
         },
         "setby": "- set by msg.method -",
         "basicauth": "Use basic authentication",
@@ -317,7 +372,8 @@
             "no-response": "No response object",
             "json-error": "JSON parse error",
             "no-url": "No url specified",
-            "deprecated-call":"Deprecated call to __method__"
+            "deprecated-call":"Deprecated call to __method__",
+            "invalid-transport":"non-http transport requested"
         },
         "status": {
             "requesting": "requesting"
@@ -347,7 +403,8 @@
     },
     "watch": {
         "label": {
-            "files": "File(s)"
+            "files": "File(s)",
+            "recursive": "Watch sub-directories recursively"
         },
         "placeholder": {
             "files": "Comma-separated list of files and/or directories"
@@ -365,7 +422,9 @@
             "close-connection": "Close connection after each message is sent?",
             "decode-base64": "Decode Base64 message?",
             "server": "Server",
-            "return": "Return"
+            "return": "Return",
+            "ms": "ms",
+            "chars": "chars"
         },
         "type": {
             "listen": "Listen on",
@@ -383,7 +442,8 @@
             "timeout": "after a fixed timeout of",
             "character": "when character received is",
             "number": "a fixed number of chars",
-            "never": "never - keep connection open"
+            "never": "never - keep connection open",
+            "immed": "immediately - don't wait for reply"
         },
         "status": {
             "connecting": "connecting to __host__:__port__",
@@ -485,6 +545,9 @@
             "null":"is null",
             "nnull":"is not null",
             "else":"otherwise"
+        },
+        "errors": {
+            "invalid-expr": "Invalid JSONata expression: __error__"
         }
     },
     "change": {
@@ -509,7 +572,8 @@
         },
         "errors": {
             "invalid-from": "Invalid 'from' property: __error__",
-            "invalid-json": "Invalid 'to' JSON property"
+            "invalid-json": "Invalid 'to' JSON property",
+            "invalid-expr": "Invalid JSONata expression: __error__"
         }
     },
     "range": {
@@ -540,8 +604,8 @@
         "label": {
             "columns": "Columns",
             "separator": "Separator",
-            "c2o": "CSV-to-Object options",
-            "o2c": "Object-to-CSV options",
+            "c2o": "CSV to Object options",
+            "o2c": "Object to CSV options",
             "input": "Input",
             "firstrow": "first row contains column names",
             "output": "Output",
@@ -570,13 +634,13 @@
             "windows": "Windows (\\r\\n)"
         },
         "errors": {
-            "csv_js": "This node only handles csv strings or js objects.",
-            "obj_csv": "No columns template specified for object -> csv."
+            "csv_js": "This node only handles CSV strings or js objects.",
+            "obj_csv": "No columns template specified for object -> CSV."
         }
     },
     "html": {
         "label": {
-            "select": "Select",
+            "select": "Selector",
             "output": "Output"
         },
         "output": {
@@ -587,10 +651,20 @@
         "format": {
             "single": "as a single message containing an array",
             "multi": "as multiple messages, one for each element"
-        },
-        "tip": "Tip: The <b>Select</b> value is a <a href=\"https://github.com/fb55/CSSselect#user-content-supported-selectors\" target=\"_new\"><i><u>CSS Selector</u></i></a>, similar to a jQuery selector."
+        }
     },
     "json": {
+        "errors": {
+            "dropped-object": "Ignored non-object payload",
+            "dropped": "Ignored unsupported payload type",
+            "dropped-error": "Failed to convert payload"
+        },
+        "label": {
+            "o2j": "Object to JSON options",
+            "pretty": "Format JSON string"
+        }
+    },
+    "yaml": {
         "errors": {
             "dropped-object": "Ignored non-object payload",
             "dropped": "Ignored unsupported payload type",
@@ -599,11 +673,11 @@
     },
     "xml": {
         "label": {
-            "represent": "Represent XML tag attributes as a property named",
-            "prefix": "Prefix to access character content",
-            "advanced": "Advanced options"
+            "represent": "Property name for XML tag attributes",
+            "prefix": "Property name for tag text content",
+            "advanced": "Advanced options",
+            "x2o": "XML to Object options"
         },
-        "tip": "There is no simple way to convert XML attributes to JSON so the approach taken here is to add a property, named $ by default, to the JSON structure.",
         "errors": {
             "xml_js": "This node only handles xml strings or js objects."
         }
@@ -617,6 +691,7 @@
             "type": "Type",
             "initpin": "Initialise pin state?",
             "debounce": "Debounce",
+            "freq": "Frequency",
             "button": "Button",
             "pimouse": "Pi Mouse",
             "pikeyboard": "Pi Keyboard",
@@ -631,6 +706,7 @@
         },
         "digout": "Digital output",
         "pwmout": "PWM output",
+        "servo": "Servo output",
         "initpin0": "initial level of pin - low (0)",
         "initpin1": "initial level of pin - high (1)",
         "left": "left",
@@ -643,15 +719,17 @@
         "tip": {
             "pin": "<b>Pins in Use</b>: ",
             "in": "Tip: Only Digital Input is supported - input must be 0 or 1.",
-            "dig": "<b>Tip</b>: For digital output - input must be 0 or 1.",
-            "pwm": "<b>Tip</b>: For PWM output - input must be between 0 to 100."
+            "dig": "Tip: For digital output - input must be 0 or 1.",
+            "pwm": "Tip: For PWM output - input must be between 0 to 100; setting high frequency might occupy more CPU than expected.",
+            "ser": "<b>Tip</b>: For Servo output - input must be between 0 to 100. 50 is centre."
         },
         "types": {
             "digout": "digital output",
             "input": "input",
             "pullup": "input with pull up",
             "pulldown": "input with pull down",
-            "pwmout": "PWM output"
+            "pwmout": "PWM output",
+            "servo": "Servo output"
         },
         "status": {
             "stopped": "stopped",
@@ -694,8 +772,11 @@
             "action": "Action",
             "addnewline": "Add newline (\\n) to each payload?",
             "createdir": "Create directory if it doesn't exist?",
-            "outputas": "Output as",
+            "outputas": "Output",
+            "breakchunks": "Break into chunks",
+            "breaklines": "Break into lines",
             "filelabel": "file",
+            "sendError": "Send message on error (legacy mode)",
             "deletelabel": "delete __file__"
         },
         "action": {
@@ -704,8 +785,10 @@
             "delete": "delete file"
         },
         "output": {
-            "utf8": "a utf8 string",
-            "buffer": "a Buffer"
+            "utf8": "a single utf8 string",
+            "buffer": "a single Buffer object",
+            "lines": "a msg per line",
+            "stream": "a stream of Buffers"
         },
         "status": {
             "wrotefile": "wrote to file: __file__",
@@ -719,6 +802,45 @@
             "writefail": "failed to write to file: __error__",
             "appendfail": "failed to append to file: __error__",
             "createfail": "failed to create file: __error__"
-        }
+        },
+        "tip": "Tip: The filename should be an absolute path, otherwise it will be relative to the working directory of the Node-RED process."
+    },
+    "split": {
+        "intro":"Split <code>msg.payload</code> based on type:",
+        "object":"<b>Object</b>",
+        "objectSend":"Send a message for each key/value pair",
+        "strBuff":"<b>String</b> / <b>Buffer</b>",
+        "array":"<b>Array</b>",
+        "splitUsing":"Split using",
+        "splitLength":"Fixed length of",
+        "stream":"Handle as a stream of messages",
+        "addname":" Copy key to "
+    },
+    "join":{
+        "mode":{
+            "mode":"Mode",
+            "auto":"automatic",
+            "custom":"manual"
+        },
+        "combine":"Combine each",
+        "create":"to create",
+        "type":{
+            "string":"a String",
+            "array":"an Array",
+            "buffer":"a Buffer",
+            "object":"a key/value Object",
+            "merged":"a merged Object"
+        },
+        "using":"using the value of",
+        "key":"as the key",
+        "joinedUsing":"joined using",
+        "send":"Send the message:",
+        "afterCount":"After a number of message parts",
+        "count":"count",
+        "subsequent":"and every subsequent message.",
+        "afterTimeout":"After a timeout following the first message",
+        "seconds":"seconds",
+        "complete":"After a message with the <code>msg.complete</code> property set",
+        "tip":"This mode assumes this node is either paired with a <i>split</i> node or the received messages will have a properly configured <code>msg.parts</code> property."
     }
 }

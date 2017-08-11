@@ -1,5 +1,5 @@
 /**
- * Copyright 2014, 2015 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,24 +25,58 @@ module.exports = {
         log = runtime.log;
     },
     get: function(req,res) {
-        log.audit({event: "flows.get"},req);
-        res.json(redNodes.getFlows());
+        var version = req.get("Node-RED-API-Version")||"v1";
+        if (version === "v1") {
+            log.audit({event: "flows.get",version:"v1"},req);
+            res.json(redNodes.getFlows().flows);
+        } else if (version === "v2") {
+            log.audit({event: "flows.get",version:"v2"},req);
+            res.json(redNodes.getFlows());
+        } else {
+            log.audit({event: "flows.get",version:version,error:"invalid_api_version"},req);
+            res.status(400).json({code:"invalid_api_version", message:"Invalid API Version requested"});
+        }
     },
     post: function(req,res) {
+        var version = req.get("Node-RED-API-Version")||"v1";
+        if (!/^v[12]$/.test(version)) {
+            log.audit({event: "flows.set",version:version,error:"invalid_api_version"},req);
+            res.status(400).json({code:"invalid_api_version", message:"Invalid API Version requested"});
+            return;
+        }
         var flows = req.body;
         var deploymentType = req.get("Node-RED-Deployment-Type")||"full";
-        log.audit({event: "flows.set",type:deploymentType},req);
+        log.audit({event: "flows.set",type:deploymentType,version:version},req);
         if (deploymentType === 'reload') {
-            redNodes.loadFlows().then(function() {
-                res.status(204).end();
+            redNodes.loadFlows().then(function(flowId) {
+                if (version === "v1") {
+                    res.status(204).end();
+                } else {
+                    res.json({rev:flowId});
+                }
             }).otherwise(function(err) {
                 log.warn(log._("api.flows.error-reload",{message:err.message}));
                 log.warn(err.stack);
                 res.status(500).json({error:"unexpected_error", message:err.message});
             });
         } else {
-            redNodes.setFlows(flows,deploymentType).then(function() {
-                res.status(204).end();
+            var flowConfig = flows;
+            if (version === "v2") {
+                flowConfig = flows.flows;
+                if (flows.hasOwnProperty('rev')) {
+                    var currentVersion = redNodes.getFlows().rev;
+                    if (currentVersion !== flows.rev) {
+                        //TODO: log warning
+                        return res.status(409).json({code:"version_mismatch"});
+                    }
+                }
+            }
+            redNodes.setFlows(flowConfig,deploymentType).then(function(flowId) {
+                if (version === "v1") {
+                    res.status(204).end();
+                } else if (version === "v2") {
+                    res.json({rev:flowId});
+                }
             }).otherwise(function(err) {
                 log.warn(log._("api.flows.error-save",{message:err.message}));
                 log.warn(err.stack);

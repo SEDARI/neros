@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -422,7 +422,8 @@ describe('websocket Node', function() {
             helper.load(websocketNode, flow, function() {
                 getSocket('server').on('connection', function(sock) {
                     sock.on('message', function(msg) {
-                        msg.should.have.length(5).and.be.a.buffer;
+                        Buffer.isBuffer(msg).should.be.true();
+                        msg.should.have.length(5);
                         done();
                     });
                 });

@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <!--
-  Copyright 2013, 2015 IBM Corp.
+  Copyright JS Foundation and other contributors, http://js.foundation
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -43,22 +43,8 @@
     <div id="header-shade" class="hide"></div>
 </div>
 <div id="main-container" class="sidebar-closed hide">
-    <div id="palette">
-        <img src="red/images/spin.svg" class="palette-spinner hide"/>
-        <div id="palette-search">
-            <i class="fa fa-search"></i><input id="palette-search-input" type="text" data-i18n="[placeholder]palette.filter"><a href="#" id="palette-search-clear"><i class="fa fa-times"></i></a></input>
-        </div>
-        <div id="palette-container" class="palette-scroll"></div>
-        <div id="palette-footer">
-            <a class="palette-button" id="palette-collapse-all" href="#"><i class="fa fa-angle-double-up"></i></a>
-            <a class="palette-button" id="palette-expand-all" href="#"><i class="fa fa-angle-double-down"></i></a>
-        </div>
-
-    </div><!-- /palette -->
-
     <div id="workspace">
         <ul id="workspace-tabs"></ul>
-        <div id="workspace-add-tab"><a id="btn-workspace-add-tab" href="#"><i class="fa fa-plus"></i></a></div>
         <div id="chart" tabindex="1"></div>
         <div id="workspace-toolbar"></div>
         <div id="workspace-footer">
@@ -66,13 +52,26 @@
             <a class="workspace-footer-button" id="btn-zoom-zero" href="#"><i class="fa fa-circle-o"></i></a>
             <a class="workspace-footer-button" id="btn-zoom-in" href="#"><i class="fa fa-plus"></i></a>
         </div>
+        <div id="editor-shade" class="hide"></div>
     </div>
-    <div id="editor-shade" class="hide"></div>
     <div id="editor-stack"></div>
+    <div id="palette">
+        <img src="red/images/spin.svg" class="palette-spinner hide"/>
+        <div id="palette-search" class="palette-search hide">
+            <input type="text" data-i18n="[placeholder]palette.filter"></input>
+        </div>
+        <div id="palette-container" class="palette-scroll hide"></div>
+        <div id="palette-footer">
+            <a class="palette-button" id="palette-collapse-all" href="#"><i class="fa fa-angle-double-up"></i></a>
+            <a class="palette-button" id="palette-expand-all" href="#"><i class="fa fa-angle-double-down"></i></a>
+        </div>
+        <div id="palette-shade" class="hide"></div>
+    </div><!-- /palette -->
     <div id="sidebar">
         <ul id="sidebar-tabs"></ul>
         <div id="sidebar-content"></div>
         <div id="sidebar-footer"></div>
+        <div id="sidebar-shade" class="hide"></div>
     </div>
 
     <div id="sidebar-separator"></div>
@@ -84,11 +83,25 @@
 
 <div id="node-dialog-confirm-deploy" class="hide">
     <form class="form-horizontal">
-        <div id="node-dialog-confirm-deploy-config" style="text-align: left; padding-top: 30px;" data-i18n="[prepend]deploy.confirm.improperlyConfigured;[append]deploy.confirm.confirm">
-            <ul style="font-size: 0.9em; width: 400px; margin: 10px auto; text-align: left;" id="node-dialog-confirm-deploy-invalid-list"></ul>
+        <div id="node-dialog-confirm-deploy-config" class="node-dialog-confirm-row" data-i18n="[prepend]deploy.confirm.improperlyConfigured;[append]deploy.confirm.confirm">
+            <ul id="node-dialog-confirm-deploy-invalid-list"></ul>
         </div>
-        <div id="node-dialog-confirm-deploy-unknown" style="text-align: left; padding-top: 10px;" data-i18n="[prepend]deploy.confirm.unknown;[append]deploy.confirm.confirm">
-            <ul style="font-size: 0.9em; width: 400px; margin: 10px auto; text-align: left;" id="node-dialog-confirm-deploy-unknown-list"></ul>
+        <div id="node-dialog-confirm-deploy-unknown" class="node-dialog-confirm-row" data-i18n="[prepend]deploy.confirm.unknown;[append]deploy.confirm.confirm">
+            <ul id="node-dialog-confirm-deploy-unknown-list"></ul>
+        </div>
+        <div id="node-dialog-confirm-deploy-conflict" class="node-dialog-confirm-row">
+            <div style="margin-left: 40px; margin-bottom: 10px;">
+                <span data-i18n="deploy.confirm.conflict"></span>
+            </div>
+            <div id="node-dialog-confirm-deploy-conflict-checking" class="node-dialog-confirm-conflict-row">
+                <img src="red/images/spin.svg"/><div data-i18n="deploy.confirm.conflictChecking"></div>
+            </div>
+            <div id="node-dialog-confirm-deploy-conflict-auto-merge" class="node-dialog-confirm-conflict-row">
+                <i style="color: #3a3;" class="fa fa-check"></i><div data-i18n="deploy.confirm.conflictAutoMerge"></div>
+            </div>
+            <div id="node-dialog-confirm-deploy-conflict-manual-merge" class="node-dialog-confirm-conflict-row">
+                <i style="color: #999;" class="fa fa-exclamation"></i><div data-i18n="deploy.confirm.conflictManualMerge"></div>
+            </div>
         </div>
     </form>
 </div>
@@ -139,10 +152,11 @@
 
 <script type="text/x-red" data-template-name="subflow-template">
     <div class="form-row">
+        <i class="fa fa-tag"></i>
         <label for="subflow-input-name" data-i18n="common.label.name"></label><input type="text" id="subflow-input-name">
     </div>
     <div class="form-row" style="margin-bottom: 0px;">
-        <label for="subflow-input-info" data-i18n="subflow.info"></label>
+        <label for="subflow-input-info" data-i18n="editor:subflow.info"></label>
         <a href="https://help.github.com/articles/markdown-basics/" style="font-size: 0.8em; float: right;" data-i18n="[html]subflow.format"></a>
     </div>
     <div class="form-row node-text-editor-row">
@@ -151,10 +165,77 @@
     <div class="form-row form-tips" id="subflow-dialog-user-count"></div>
 </script>
 
+<script type="text/x-red" data-template-name="_expression">
+    <div id="node-input-expression-panels">
+        <div id="node-input-expression-panel-expr" class="red-ui-panel">
+            <div class="form-row" style="margin-bottom: 3px; text-align: right;">
+                <span class="node-input-expression-legacy"><i class="fa fa-exclamation-circle"></i> <span data-i18n="expressionEditor.compatMode"></span></span>
+                <button id="node-input-expression-reformat" class="editor-button editor-button-small"><span data-i18n="expressionEditor.format"></span></button>
+            </div>
+            <div class="form-row node-text-editor-row">
+                <div class="node-text-editor" id="node-input-expression"></div>
+            </div>
+        </div>
+        <div id="node-input-expression-panel-info" class="red-ui-panel">
+            <div class="form-row">
+                <ul id="node-input-expression-tabs"></ul>
+                <div id="node-input-expression-tab-help" class="node-input-expression-tab-content hide">
+                    <div>
+                        <select id="node-input-expression-func"></select>
+                        <button id="node-input-expression-func-insert" class="editor-button" data-i18n="expressionEditor.insert"></button>
+                    </div>
+                    <div id="node-input-expression-help"></div>
+                </div>
+                <div id="node-input-expression-tab-test" class="node-input-expression-tab-content hide">
+                    <div>
+                        <span style="display: inline-block; width: calc(50% - 5px);">
+                            <span data-i18n="expressionEditor.data"></span>
+                            <button style="float: right; margin-right: 5px;" id="node-input-example-reformat" class="editor-button editor-button-small"><span data-i18n="jsonEditor.format"></span></button>
+                        </span>
+                        <span style="display: inline-block; width: calc(50% - 5px);" data-i18n="expressionEditor.result"></span>
+                    </div>
+                    <div style="display: inline-block; width: calc(50% - 5px);" class="node-text-editor" id="node-input-expression-test-data"></div>
+                    <div style="display: inline-block; width: calc(50% - 5px);" class="node-text-editor" id="node-input-expression-test-result"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</script>
+<script type="text/x-red" data-template-name="_json">
+    <div class="form-row" style="margin-bottom: 3px; text-align: right;">
+        <button id="node-input-json-reformat" class="editor-button editor-button-small"><span data-i18n="jsonEditor.format"></span></button>
+    </div>
+    <div class="form-row node-text-editor-row">
+        <div style="height: 200px;min-height: 150px;" class="node-text-editor" id="node-input-json"></div>
+    </div>
+</script>
+<script type="text/x-red" data-template-name="_buffer">
+    <div id="node-input-buffer-panels">
+        <div id="node-input-buffer-panel-str" class="red-ui-panel">
+            <div class="form-row" style="margin-bottom: 3px; text-align: right;">
+                <span class="node-input-buffer-type"><i class="fa fa-exclamation-circle"></i> <span id="node-input-buffer-type-string" data-i18n="bufferEditor.modeString"></span><span id="node-input-buffer-type-array" data-i18n="bufferEditor.modeArray"></span></span>
+            </div>
+            <div class="form-row node-text-editor-row">
+                <div class="node-text-editor" id="node-input-buffer-str"></div>
+            </div>
+        </div>
+        <div id="node-input-buffer-panel-bin" class="red-ui-panel">
+            <div class="form-row node-text-editor-row" style="margin-top: 10px">
+                <div class="node-text-editor" id="node-input-buffer-bin"></div>
+            </div>
+        </div>
+    </div>
+</script>
+
 <script src="vendor/vendor.js"></script>
+<script src="vendor/jsonata/jsonata.min.js"></script>
 <script src="vendor/ace/ace.js"></script>
 <script src="vendor/ace/ext-language_tools.js"></script>
 <script src="{{ asset.red }}"></script>
+<script src="{{ asset.main }}"></script>
+{{# page.scripts }}
+<script src="{{.}}"></script>
+{{/ page.scripts }}
 
 </body>
 </html>

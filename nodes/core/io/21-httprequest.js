@@ -1,5 +1,5 @@
 /**
- * Copyright 2013, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@ module.exports = function(RED) {
     var urllib = require("url");
     var mustache = require("mustache");
     var querystring = require("querystring");
+    var cookie = require("cookie");
+    var hashSum = require("hash-sum");
 
     function HTTPRequest(n) {
         RED.nodes.createNode(this,n);
@@ -56,6 +58,11 @@ module.exports = function(RED) {
                 return;
             }
             // url must start http:// or https:// so assume http:// if not set
+            if (url.indexOf("://") !== -1 && url.indexOf("http") !== 0) {
+                node.warn(RED._("httpin.errors.invalid-transport"));
+                node.status({fill:"red",shape:"ring",text:"httpin.errors.invalid-transport"});
+                return;
+            }
             if (!((url.indexOf("http://") === 0) || (url.indexOf("https://") === 0))) {
                 if (tlsNode) {
                     url = "https://"+url;
@@ -74,17 +81,53 @@ module.exports = function(RED) {
             var opts = urllib.parse(url);
             opts.method = method;
             opts.headers = {};
+            var ctSet = "Content-Type"; // set default camel case
+            var clSet = "Content-Length";
             if (msg.headers) {
-                for (var v in msg.headers) {
-                    if (msg.headers.hasOwnProperty(v)) {
-                        var name = v.toLowerCase();
-                        if (name !== "content-type" && name !== "content-length") {
-                            // only normalise the known headers used later in this
-                            // function. Otherwise leave them alone.
-                            name = v;
-                        }
-                        opts.headers[name] = msg.headers[v];
+                if (msg.headers.hasOwnProperty('x-node-red-request-node')) {
+                    var headerHash = msg.headers['x-node-red-request-node'];
+                    delete msg.headers['x-node-red-request-node'];
+                    var hash = hashSum(msg.headers);
+                    if (hash === headerHash) {
+                        delete msg.headers;
                     }
+                }
+                if (msg.headers) {
+                    for (var v in msg.headers) {
+                        if (msg.headers.hasOwnProperty(v)) {
+                            var name = v.toLowerCase();
+                            if (name !== "content-type" && name !== "content-length") {
+                                // only normalise the known headers used later in this
+                                // function. Otherwise leave them alone.
+                                name = v;
+                            }
+                            else if (name === 'content-type') { ctSet = v; }
+                            else { clSet = v; }
+                            opts.headers[name] = msg.headers[v];
+                        }
+                    }
+                }
+            }
+            if (msg.cookies) {
+                var cookies = [];
+                if (opts.headers.hasOwnProperty('cookie')) {
+                    cookies.push(opts.headers.cookie);
+                }
+
+                for (var name in msg.cookies) {
+                    if (msg.cookies.hasOwnProperty(name)) {
+                        if (msg.cookies[name] === null || msg.cookies[name].value === null) {
+                            // This case clears a cookie for HTTP In/Response nodes.
+                            // Ignore for this node.
+                        } else if (typeof msg.cookies[name] === 'object') {
+                            cookies.push(cookie.serialize(name,msg.cookies[name].value));
+                        } else {
+                            cookies.push(cookie.serialize(name,msg.cookies[name]));
+                        }
+                    }
+                }
+                if (cookies.length > 0) {
+                    opts.headers.cookie = cookies.join("; ");
                 }
             }
             if (this.credentials && this.credentials.user) {
@@ -92,7 +135,7 @@ module.exports = function(RED) {
             }
             var payload = null;
 
-            if (msg.payload && (method == "POST" || method == "PUT" || method == "PATCH" ) ) {
+            if (typeof msg.payload !== "undefined" && (method == "POST" || method == "PUT" || method == "PATCH" ) ) {
                 if (typeof msg.payload === "string" || Buffer.isBuffer(msg.payload)) {
                     payload = msg.payload;
                 } else if (typeof msg.payload == "number") {
@@ -103,17 +146,26 @@ module.exports = function(RED) {
                     } else {
                         payload = JSON.stringify(msg.payload);
                         if (opts.headers['content-type'] == null) {
-                            opts.headers['content-type'] = "application/json";
+                            opts.headers[ctSet] = "application/json";
                         }
                     }
                 }
                 if (opts.headers['content-length'] == null) {
                     if (Buffer.isBuffer(payload)) {
-                        opts.headers['content-length'] = payload.length;
+                        opts.headers[clSet] = payload.length;
                     } else {
-                        opts.headers['content-length'] = Buffer.byteLength(payload);
+                        opts.headers[clSet] = Buffer.byteLength(payload);
                     }
                 }
+            }
+            // revert to user supplied Capitalisation if needed.
+            if (opts.headers.hasOwnProperty('content-type') && (ctSet !== 'content-type')) {
+                opts.headers[ctSet] = opts.headers['content-type'];
+                delete opts.headers['content-type'];
+            }
+            if (opts.headers.hasOwnProperty('content-length') && (clSet !== 'content-length')) {
+                opts.headers[clSet] = opts.headers['content-length'];
+                delete opts.headers['content-length'];
             }
             var urltotest = url;
             var noproxy;
@@ -135,8 +187,10 @@ module.exports = function(RED) {
                     opts.path = opts.pathname = path;
                     opts.headers = heads;
                     opts.method = method;
-                    //console.log(opts);
                     urltotest = match[0];
+                    if (opts.auth) {
+                        opts.headers['Proxy-Authorization'] = "Basic "+new Buffer(opts.auth).toString('Base64')
+                    }
                 }
                 else { node.warn("Bad proxy url: "+process.env.http_proxy); }
             }
@@ -144,13 +198,39 @@ module.exports = function(RED) {
                 tlsNode.addTLSOptions(opts);
             }
             var req = ((/^https/.test(urltotest))?https:http).request(opts,function(res) {
-                (node.ret === "bin") ? res.setEncoding('binary') : res.setEncoding('utf8');
+                // Force NodeJs to return a Buffer (instead of a string)
+                // See https://github.com/nodejs/node/issues/6038
+                res.setEncoding(null);
+                delete res._readableState.decoder;
+
                 msg.statusCode = res.statusCode;
                 msg.headers = res.headers;
-                msg.payload = "";
+                msg.responseUrl = res.responseUrl;
+                msg.payload = [];
+
+                if (msg.headers.hasOwnProperty('set-cookie')) {
+                    msg.responseCookies = {};
+                    msg.headers['set-cookie'].forEach(function(c) {
+                        var parsedCookie = cookie.parse(c);
+                        var eq_idx = c.indexOf('=');
+                        var key = c.substr(0, eq_idx).trim()
+                        parsedCookie.value = parsedCookie[key];
+                        delete parsedCookie[key];
+                        msg.responseCookies[key] = parsedCookie;
+
+                    })
+
+                }
+                msg.headers['x-node-red-request-node'] = hashSum(msg.headers);
                 // msg.url = url;   // revert when warning above finally removed
                 res.on('data',function(chunk) {
-                    msg.payload += chunk;
+                    if (!Buffer.isBuffer(chunk)) {
+                        // if the 'setEncoding(null)' fix above stops working in
+                        // a new Node.js release, throw a noisy error so we know
+                        // about it.
+                        throw new Error("HTTP Request data chunk not a Buffer");
+                    }
+                    msg.payload.push(chunk);
                 });
                 res.on('end',function() {
                     if (node.metric()) {
@@ -163,15 +243,26 @@ module.exports = function(RED) {
                             node.metric("size.bytes", msg, res.client.bytesRead);
                         }
                     }
-                    if (node.ret === "bin") {
-                        msg.payload = new Buffer(msg.payload,"binary");
+
+                    // Check that msg.payload is an array - if the req error
+                    // handler has been called, it will have been set to a string
+                    // and the error already handled - so no further action should
+                    // be taken. #1344
+                    if (Array.isArray(msg.payload)) {
+                        // Convert the payload to the required return type
+                        msg.payload = Buffer.concat(msg.payload); // bin
+                        if (node.ret !== "bin") {
+                            msg.payload = msg.payload.toString('utf8'); // txt
+
+                            if (node.ret === "obj") {
+                                try { msg.payload = JSON.parse(msg.payload); } // obj
+                                catch(e) { node.warn(RED._("httpin.errors.json-error")); }
+                            }
+                        }
+
+                        node.send(msg);
+                        node.status({});
                     }
-                    else if (node.ret === "obj") {
-                        try { msg.payload = JSON.parse(msg.payload); }
-                        catch(e) { node.warn(RED._("httpin.errors.json-error")); }
-                    }
-                    node.send(msg);
-                    node.status({});
                 });
             });
             req.setTimeout(node.reqTimeout, function() {
@@ -192,6 +283,10 @@ module.exports = function(RED) {
                 req.write(payload);
             }
             req.end();
+        });
+
+        this.on("close",function() {
+            node.status({});
         });
     }
 

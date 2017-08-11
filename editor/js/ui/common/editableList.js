@@ -1,5 +1,5 @@
 /**
- * Copyright 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,9 @@
  *   - removable : boolean - whether to display delete button on items
  *   - addItem : function(row,index,itemData) - when an item is added
  *   - removeItem : function(itemData) - called when an item is removed
+ *   - filter : function(itemData) - called for each item to determine if it should be shown
+ *   - sort : function(itemDataA,itemDataB) - called to sort items
+ *   - scrollOnAdd : boolean - whether to scroll to newly added items
  * methods:
  *   - addItem(itemData)
  *   - removeItem(itemData)
@@ -34,6 +37,9 @@
  *   - height(height)
  *   - items()
  *   - empty()
+ *   - filter(filter)
+ *   - sort(sort)
+ *   - length()
  */
     $.widget( "nodered.editableList", {
         _create: function() {
@@ -44,9 +50,19 @@
             this.uiContainer = this.element
                 .wrap( "<div>" )
                 .parent();
-            this.topContainer = this.uiContainer.wrap("<div>").parent();
 
+            if (this.options.header) {
+                this.options.header.addClass("red-ui-editableList-header");
+                this.borderContainer = this.uiContainer.wrap("<div>").parent();
+                this.borderContainer.prepend(this.options.header);
+                this.topContainer = this.borderContainer.wrap("<div>").parent();
+            } else {
+                this.topContainer = this.uiContainer.wrap("<div>").parent();
+            }
             this.topContainer.addClass('red-ui-editableList');
+            if (this.options.class) {
+                this.topContainer.addClass(this.options.class);
+            }
 
             if (this.options.addButton !== false) {
                 var addLabel;
@@ -66,11 +82,35 @@
                         that.addItem({});
                     });
             }
+            if (this.element.css("position") === "absolute") {
+                ["top","left","bottom","right"].forEach(function(s) {
+                    var v = that.element.css(s);
+                    if (v!=="auto" && v!=="") {
+                        that.topContainer.css(s,v);
+                        that.uiContainer.css(s,"0");
+                        that.element.css(s,'auto');
+                    }
+                })
+                this.element.css("position","static");
+                this.topContainer.css("position","absolute");
+                this.uiContainer.css("position","absolute");
 
+            }
+            if (this.options.header) {
+                this.borderContainer.addClass("red-ui-editableList-border");
+            } else {
+                this.uiContainer.addClass("red-ui-editableList-border");
+            }
             this.uiContainer.addClass("red-ui-editableList-container");
 
             this.uiHeight = this.element.height();
 
+            this.activeFilter = this.options.filter||null;
+            this.activeSort = this.options.sort||null;
+            this.scrollOnAdd = this.options.scrollOnAdd;
+            if (this.scrollOnAdd === undefined) {
+                this.scrollOnAdd = true;
+            }
             var minHeight = this.element.css("minHeight");
             if (minHeight !== '0px') {
                 this.uiContainer.css("minHeight",minHeight);
@@ -141,6 +181,42 @@
         },
         _destroy: function() {
         },
+        _refreshFilter: function() {
+            var that = this;
+            var count = 0;
+            if (!this.activeFilter) {
+                return this.element.children().show();
+            }
+            var items = this.items();
+            items.each(function (i,el) {
+                var data = el.data('data');
+                try {
+                    if (that.activeFilter(data)) {
+                        el.parent().show();
+                        count++;
+                    } else {
+                        el.parent().hide();
+                    }
+                } catch(err) {
+                    console.log(err);
+                    el.parent().show();
+                    count++;
+                }
+            });
+            return count;
+        },
+        _refreshSort: function() {
+            if (this.activeSort) {
+                var items = this.element.children();
+                var that = this;
+                items.sort(function(A,B) {
+                    return that.activeSort($(A).find(".red-ui-editableList-item-content").data('data'),$(B).find(".red-ui-editableList-item-content").data('data'));
+                });
+                $.each(items,function(idx,li) {
+                    that.element.append(li);
+                })
+            }
+        },
         width: function(desiredWidth) {
             this.uiWidth = desiredWidth;
             this._resize();
@@ -152,7 +228,23 @@
         addItem: function(data) {
             var that = this;
             data = data || {};
-            var li = $('<li>').appendTo(this.element);
+            var li = $('<li>');
+            var added = false;
+            if (this.activeSort) {
+                var items = this.items();
+                var skip = false;
+                items.each(function(i,el) {
+                    if (added) { return }
+                    var itemData = el.data('data');
+                    if (that.activeSort(data,itemData) < 0) {
+                         li.insertBefore(el.closest("li"));
+                         added = true;
+                    }
+                });
+            }
+            if (!added) {
+                li.appendTo(this.element);
+            }
             var row = $('<div/>').addClass("red-ui-editableList-item-content").appendTo(li);
             row.data('data',data);
             if (this.options.sortable === true) {
@@ -163,7 +255,8 @@
                 var deleteButton = $('<a/>',{href:"#",class:"red-ui-editableList-item-remove editor-button editor-button-small"}).appendTo(li);
                 $('<i/>',{class:"fa fa-remove"}).appendTo(deleteButton);
                 li.addClass("red-ui-editableList-item-removable");
-                deleteButton.click(function() {
+                deleteButton.click(function(evt) {
+                    evt.preventDefault();
                     var data = row.data('data');
                     li.addClass("red-ui-editableList-item-deleting")
                     li.fadeOut(300, function() {
@@ -178,10 +271,26 @@
                 var index = that.element.children().length-1;
                 setTimeout(function() {
                     that.options.addItem(row,index,data);
-                    setTimeout(function() {
-                        that.uiContainer.scrollTop(that.element.height());
-                    },0);
+                    if (that.activeFilter) {
+                        try {
+                            if (!that.activeFilter(data)) {
+                                li.hide();
+                            }
+                        } catch(err) {
+                        }
+                    }
+
+                    if (!that.activeSort && that.scrollOnAdd) {
+                        setTimeout(function() {
+                            that.uiContainer.scrollTop(that.element.height());
+                        },0);
+                    }
                 },0);
+            }
+        },
+        addItems: function(items) {
+            for (var i=0; i<items.length;i++) {
+                this.addItem(items[i]);
             }
         },
         removeItem: function(data) {
@@ -198,6 +307,21 @@
         },
         empty: function() {
             this.element.empty();
+        },
+        filter: function(filter) {
+            if (filter !== undefined) {
+                this.activeFilter = filter;
+            }
+            return this._refreshFilter();
+        },
+        sort: function(sort) {
+            if (sort !== undefined) {
+                this.activeSort = sort;
+            }
+            return this._refreshSort();
+        },
+        length: function() {
+            return this.element.children().length;
         }
     });
 })(jQuery);

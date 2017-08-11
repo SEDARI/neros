@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,9 +37,35 @@ function diffNodes(oldNode,newNode) {
     return false;
 }
 
+var EnvVarPropertyRE = /^\$\((\S+)\)$/;
+
+function mapEnvVarProperties(obj,prop) {
+    if (Buffer.isBuffer(obj[prop])) {
+        return;
+    } else if (Array.isArray(obj[prop])) {
+        for (var i=0;i<obj[prop].length;i++) {
+            mapEnvVarProperties(obj[prop],i);
+        }
+    } else if (typeof obj[prop] === 'string') {
+        var m;
+        if ( (m = EnvVarPropertyRE.exec(obj[prop])) !== null) {
+            if (process.env.hasOwnProperty(m[1])) {
+                obj[prop] = process.env[m[1]];
+            }
+        }
+    } else {
+        for (var p in obj[prop]) {
+            if (obj[prop].hasOwnProperty(p)) {
+                mapEnvVarProperties(obj[prop],p);
+            }
+        }
+    }
+}
+
 module.exports = {
 
     diffNodes: diffNodes,
+    mapEnvVarProperties: mapEnvVarProperties,
 
     parseConfig: function(config) {
         var flow = {};
@@ -161,6 +187,12 @@ module.exports = {
         var wires;
         var j,k;
 
+        if (!oldConfig) {
+            oldConfig = {
+                flows:{},
+                allNodes:{}
+            }
+        }
         var changedSubflows = {};
 
         var added = {};
@@ -170,60 +202,91 @@ module.exports = {
 
         var linkMap = {};
 
+        var changedTabs = {};
+        
+        // Look for tabs that have been removed
+        for (id in oldConfig.flows) {
+            if (oldConfig.flows.hasOwnProperty(id) && (!newConfig.flows.hasOwnProperty(id))) {
+                removed[id] = oldConfig.allNodes[id];
+            }
+        }
+
+        // Look for tabs that have been disabled
+        for (id in oldConfig.flows) {
+            if (oldConfig.flows.hasOwnProperty(id) && newConfig.flows.hasOwnProperty(id)) {
+                var originalState = oldConfig.flows[id].disabled||false;
+                var newState = newConfig.flows[id].disabled||false;
+                if (originalState !== newState) {
+                    changedTabs[id] = true;
+                    if (originalState) {
+                        added[id] = oldConfig.allNodes[id];
+                    } else {
+                        removed[id] = oldConfig.allNodes[id];
+                    }
+                }
+            }
+        }
+
         for (id in oldConfig.allNodes) {
             if (oldConfig.allNodes.hasOwnProperty(id)) {
                 node = oldConfig.allNodes[id];
-                // build the map of what this node was previously wired to
-                if (node.wires) {
-                    linkMap[node.id] = linkMap[node.id] || [];
-                    for (j=0;j<node.wires.length;j++) {
-                        wires = node.wires[j];
-                        for (k=0;k<wires.length;k++) {
-                            linkMap[node.id].push(wires[k]);
-                            nn = oldConfig.allNodes[wires[k]];
-                            if (nn) {
-                                linkMap[nn.id] = linkMap[nn.id] || [];
-                                linkMap[nn.id].push(node.id);
+                if (node.type !== 'tab') {
+                    // build the map of what this node was previously wired to
+                    if (node.wires) {
+                        linkMap[node.id] = linkMap[node.id] || [];
+                        for (j=0;j<node.wires.length;j++) {
+                            wires = node.wires[j];
+                            for (k=0;k<wires.length;k++) {
+                                linkMap[node.id].push(wires[k]);
+                                nn = oldConfig.allNodes[wires[k]];
+                                if (nn) {
+                                    linkMap[nn.id] = linkMap[nn.id] || [];
+                                    linkMap[nn.id].push(node.id);
+                                }
                             }
                         }
                     }
-                }
-                // This node has been removed
-                if (!newConfig.allNodes.hasOwnProperty(id)) {
-                    removed[id] = node;
-                    // Mark the container as changed
-                    if (newConfig.allNodes[removed[id].z]) {
-                        changed[removed[id].z] = newConfig.allNodes[removed[id].z];
-                        if (changed[removed[id].z].type === "subflow") {
-                            changedSubflows[removed[id].z] = changed[removed[id].z];
-                            //delete removed[id];
-                        }
-                    }
-                } else {
-                    // This node has a material configuration change
-                    if (diffNodes(node,newConfig.allNodes[id]) || newConfig.allNodes[id].credentials) {
-                        changed[id] = newConfig.allNodes[id];
-                        if (changed[id].type === "subflow") {
-                            changedSubflows[id] = changed[id];
-                        }
+                    // This node has been removed
+                    if (removed[node.z] || !newConfig.allNodes.hasOwnProperty(id)) {
+                        removed[id] = node;
                         // Mark the container as changed
-                        if (newConfig.allNodes[changed[id].z]) {
-                            changed[changed[id].z] = newConfig.allNodes[changed[id].z];
-                            if (changed[changed[id].z].type === "subflow") {
-                                changedSubflows[changed[id].z] = changed[changed[id].z];
-                                delete changed[id];
+                        if (!removed[node.z] && newConfig.allNodes[removed[id].z]) {
+                            changed[removed[id].z] = newConfig.allNodes[removed[id].z];
+                            if (changed[removed[id].z].type === "subflow") {
+                                changedSubflows[removed[id].z] = changed[removed[id].z];
+                                //delete removed[id];
                             }
                         }
-                    }
-                    // This node's wiring has changed
-                    if (!redUtil.compareObjects(node.wires,newConfig.allNodes[id].wires)) {
-                        wiringChanged[id] = newConfig.allNodes[id];
-                        // Mark the container as changed
-                        if (newConfig.allNodes[wiringChanged[id].z]) {
-                            changed[wiringChanged[id].z] = newConfig.allNodes[wiringChanged[id].z];
-                            if (changed[wiringChanged[id].z].type === "subflow") {
-                                changedSubflows[wiringChanged[id].z] = changed[wiringChanged[id].z];
-                                delete wiringChanged[id];
+                    } else {
+                        if (added[node.z]) {
+                            added[id] = node;
+                        } else {
+                            // This node has a material configuration change
+                            if (diffNodes(node,newConfig.allNodes[id]) || newConfig.allNodes[id].credentials) {
+                                changed[id] = newConfig.allNodes[id];
+                                if (changed[id].type === "subflow") {
+                                    changedSubflows[id] = changed[id];
+                                }
+                                // Mark the container as changed
+                                if (newConfig.allNodes[changed[id].z]) {
+                                    changed[changed[id].z] = newConfig.allNodes[changed[id].z];
+                                    if (changed[changed[id].z].type === "subflow") {
+                                        changedSubflows[changed[id].z] = changed[changed[id].z];
+                                        delete changed[id];
+                                    }
+                                }
+                            }
+                            // This node's wiring has changed
+                            if (!redUtil.compareObjects(node.wires,newConfig.allNodes[id].wires)) {
+                                wiringChanged[id] = newConfig.allNodes[id];
+                                // Mark the container as changed
+                                if (newConfig.allNodes[wiringChanged[id].z]) {
+                                    changed[wiringChanged[id].z] = newConfig.allNodes[wiringChanged[id].z];
+                                    if (changed[wiringChanged[id].z].type === "subflow") {
+                                        changedSubflows[wiringChanged[id].z] = changed[wiringChanged[id].z];
+                                        delete wiringChanged[id];
+                                    }
+                                }
                             }
                         }
                     }
@@ -301,7 +364,7 @@ module.exports = {
                     }
                 }
             }
-        } while(madeChange===true)
+        } while (madeChange===true)
 
         // Find any nodes that exist on a subflow template and remove from changed
         // list as the parent subflow will now be marked as containing a change
@@ -316,7 +379,7 @@ module.exports = {
 
         // Recursively mark all instances of changed subflows as changed
         var changedSubflowStack = Object.keys(changedSubflows);
-        while(changedSubflowStack.length > 0) {
+        while (changedSubflowStack.length > 0) {
             var subflowId = changedSubflowStack.pop();
             for (id in newConfig.allNodes) {
                 if (newConfig.allNodes.hasOwnProperty(id)) {
@@ -350,7 +413,7 @@ module.exports = {
         // Traverse the links of all modified nodes to mark the connected nodes
         var modifiedNodes = diff.added.concat(diff.changed).concat(diff.removed).concat(diff.rewired);
         var visited = {};
-        while(modifiedNodes.length > 0) {
+        while (modifiedNodes.length > 0) {
             node = modifiedNodes.pop();
             if (!visited[node]) {
                 visited[node] = true;
@@ -362,6 +425,7 @@ module.exports = {
                 }
             }
         }
+        // console.log(diff);
         // for (id in newConfig.allNodes) {
         //     console.log(
         //         (added[id]?"+":(changed[id]?"!":" "))+(wiringChanged[id]?"w":" ")+(diff.linked.indexOf(id)!==-1?"~":" "),

@@ -1,5 +1,5 @@
 /**
- * Copyright 2013, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -113,7 +113,7 @@ RED.sidebar.config = (function() {
         if (showUnusedOnly) {
             var hiddenCount = nodes.length;
             nodes = nodes.filter(function(n) {
-                return n.users.length === 0;
+                return n._def.hasUsers!==false && n.users.length === 0;
             })
             hiddenCount = hiddenCount - nodes.length;
             if (hiddenCount > 0) {
@@ -131,30 +131,19 @@ RED.sidebar.config = (function() {
         } else {
             var currentType = "";
             nodes.forEach(function(node) {
-                var label = "";
-                if (typeof node._def.label == "function") {
-                    try {
-                        label = node._def.label.call(node);
-                    } catch(err) {
-                        console.log("Definition error: "+node_def.type+".label",err);
-                        label = node_def.type;
-                    }
-
-                } else {
-                    label = node._def.label;
-                }
-                label = label || node.id;
+                var label = RED.utils.getNodeLabel(node,node.id);
                 if (node.type != currentType) {
                     $('<li class="config_node_type">'+node.type+'</li>').appendTo(list);
                     currentType = node.type;
                 }
 
-                var entry = $('<li class="palette_node config_node"></li>').appendTo(list);
+                var entry = $('<li class="palette_node config_node palette_node_id_'+node.id.replace(/\./g,"-")+'"></li>').appendTo(list);
                 $('<div class="palette_label"></div>').text(label).appendTo(entry);
-
-                var iconContainer = $('<div/>',{class:"palette_icon_container  palette_icon_container_right"}).text(node.users.length).appendTo(entry);
-                if (node.users.length === 0) {
-                    entry.addClass("config_node_unused");
+                if (node._def.hasUsers !== false) {
+                    var iconContainer = $('<div/>',{class:"palette_icon_container  palette_icon_container_right"}).text(node.users.length).appendTo(entry);
+                    if (node.users.length === 0) {
+                        entry.addClass("config_node_unused");
+                    }
                 }
                 entry.on('click',function(e) {
                     RED.sidebar.info.refresh(node);
@@ -236,10 +225,7 @@ RED.sidebar.config = (function() {
             visible: false,
             onchange: function() { refreshConfigNodeList(); }
         });
-
-        RED.menu.setAction('menu-item-config-nodes',function() {
-            RED.sidebar.show('config');
-        })
+        RED.actions.add("core:show-config-tab",function() {RED.sidebar.show('config')});
 
         $("#workspace-config-node-collapse-all").on("click", function(e) {
             e.preventDefault();
@@ -280,15 +266,45 @@ RED.sidebar.config = (function() {
 
 
     }
-    function show(unused) {
-        if (unused !== undefined) {
-            if (unused) {
+    function show(id) {
+        if (typeof id === 'boolean') {
+            if (id) {
                 $('#workspace-config-node-filter-unused').click();
             } else {
                 $('#workspace-config-node-filter-all').click();
             }
         }
         refreshConfigNodeList();
+        if (typeof id === "string") {
+            $('#workspace-config-node-filter-all').click();
+            id = id.replace(/\./g,"-");
+            setTimeout(function() {
+                var node = $(".palette_node_id_"+id);
+                var y = node.position().top;
+                var h = node.height();
+                var scrollWindow = $(".sidebar-node-config");
+                var scrollHeight = scrollWindow.height();
+
+                if (y+h > scrollHeight) {
+                    scrollWindow.animate({scrollTop: '-='+(scrollHeight-(y+h)-30)},150);
+                } else if (y<0) {
+                    scrollWindow.animate({scrollTop: '+='+(y-10)},150);
+                }
+                var flash = 21;
+                var flashFunc = function() {
+                    if ((flash%2)===0) {
+                        node.removeClass('node_highlighted');
+                    } else {
+                        node.addClass('node_highlighted');
+                    }
+                    flash--;
+                    if (flash >= 0) {
+                        setTimeout(flashFunc,100);
+                    }
+                }
+                flashFunc();
+            },100);
+        }
         RED.sidebar.show("config");
     }
     return {

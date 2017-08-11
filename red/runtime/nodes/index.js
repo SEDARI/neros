@@ -1,5 +1,5 @@
 /**
- * Copyright 2013, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +17,18 @@
 var when = require("when");
 var path = require("path");
 var fs = require("fs");
+var clone = require("clone");
 
 var registry = require("./registry");
 var credentials = require("./credentials");
 var flows = require("./flows");
+var flowUtil = require("./flows/util")
 var context = require("./context");
 var Node = require("./Node");
-var log = require("../log");
+var log = null;
+var library = require("./library");
 
 var events = require("../events");
-
-var child_process = require('child_process');
 
 var settings;
 
@@ -48,8 +49,17 @@ function registerType(nodeSet,type,constructor,opts) {
         type = nodeSet;
         nodeSet = "";
     }
-    if (opts && opts.credentials) {
-        credentials.register(type,opts.credentials);
+    if (opts) {
+        if (opts.credentials) {
+            credentials.register(type,opts.credentials);
+        }
+        if (opts.settings) {
+            try {
+                settings.registerNodeSettings(type,opts.settings);
+            } catch(err) {
+                log.warn("["+type+"] "+err.message);
+            }
+        }
     }
     registry.registerType(nodeSet,type,constructor);
 }
@@ -68,7 +78,14 @@ function createNode(node,def) {
     }
     var creds = credentials.get(id);
     if (creds) {
+        creds = clone(creds);
         //console.log("Attaching credentials to ",node.id);
+        // allow $(foo) syntax to substitute env variables for credentials also...
+        for (var p in creds) {
+            if (creds.hasOwnProperty(p)) {
+                flowUtil.mapEnvVarProperties(creds,p);
+            }
+        }
         node.credentials = creds;
     } else if (credentials.getDefinition(node.type)) {
         node.credentials = {};
@@ -77,10 +94,12 @@ function createNode(node,def) {
 
 function init(runtime) {
     settings = runtime.settings;
-    credentials.init(runtime.storage);
-    flows.init(runtime.settings,runtime.storage);
+    log = runtime.log;
+    credentials.init(runtime);
+    flows.init(runtime);
     registry.init(runtime);
     context.init(runtime.settings);
+    library.init(runtime);
 }
 
 function disableNode(id) {
@@ -110,6 +129,7 @@ module.exports = {
     getNode: flows.get,
     eachNode: flows.eachNode,
 
+    paletteEditorEnabled: registry.paletteEditorEnabled,
     installModule: registry.installModule,
     uninstallModule: uninstallModule,
 
@@ -127,6 +147,9 @@ module.exports = {
 
     getNodeConfigs: registry.getNodeConfigs,
     getNodeConfig: registry.getNodeConfig,
+    getNodeIconPath: registry.getNodeIconPath,
+    getNodeExampleFlows: library.getExampleFlows,
+    getNodeExampleFlowPath: library.getExampleFlowPath,
 
     clearRegistry: registry.clear,
     cleanModuleList: registry.cleanModuleList,
@@ -144,7 +167,6 @@ module.exports = {
     removeFlow:  flows.removeFlow,
     // disableFlow: flows.disableFlow,
     // enableFlow:  flows.enableFlow,
-
 
     // Credentials
     addCredentials: credentials.add,

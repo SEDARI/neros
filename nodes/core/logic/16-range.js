@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,8 @@ module.exports = function(RED) {
                         if (n > node.maxin) { n = node.maxin; }
                     }
                     if (node.action == "roll") {
-                        if (n >= node.maxin) { n = (n - node.minin) % (node.maxin - node.minin) + node.minin; }
-                        if (n <  node.minin) { n = (n - node.minin) % (node.maxin - node.minin) + node.maxin; }
+                        var divisor = node.maxin - node.minin;
+                        n = ((n - node.minin) % divisor + divisor) % divisor + node.minin;
                     }
                     msg.payload = ((n - node.minin) / (node.maxin - node.minin) * (node.maxout - node.minout)) + node.minout;
                     if (node.round) { msg.payload = Math.round(msg.payload); }

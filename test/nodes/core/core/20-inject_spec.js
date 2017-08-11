@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ describe('inject node', function() {
                       var n3 = helper.getNode("n3");
                       n3.on("input", function(msg) {
                           msg.should.have.property('topic', 't3');
-                          msg.should.have.property('payload').be.a.Number;
+                          msg.should.have.property('payload').be.a.Number();
                           helper.clearFlows().then(function() {
                               done();
                           });

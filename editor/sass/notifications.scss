@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
     color: #666;
     border: 1px solid #325C80;
     border-left-width: 16px;
+    overflow: hidden;
 }
 .notification a {
     text-decoration: none;

@@ -1,5 +1,5 @@
 /**
- * Copyright 2013, 2014 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,8 @@ describe('LocalFileSystem', function() {
 
     it('should initialise the user directory',function(done) {
         localfilesystem.init({userDir:userDir}).then(function() {
-            fs.existsSync(path.join(userDir,"lib")).should.be.true;
-            fs.existsSync(path.join(userDir,"lib",'flows')).should.be.true;
+            fs.existsSync(path.join(userDir,"lib")).should.be.true();
+            fs.existsSync(path.join(userDir,"lib",'flows')).should.be.true();
             done();
         }).otherwise(function(err) {
             done(err);
@@ -43,7 +43,7 @@ describe('LocalFileSystem', function() {
     });
 
 
-    it('should set userDir to NRH is .config.json present',function(done) {
+    it('should set userDir to NRH if .config.json presents',function(done) {
         var oldNRH = process.env.NODE_RED_HOME;
         process.env.NODE_RED_HOME = path.join(userDir,"NRH");
         fs.mkdirSync(process.env.NODE_RED_HOME);
@@ -51,8 +51,8 @@ describe('LocalFileSystem', function() {
         var settings = {};
         localfilesystem.init(settings).then(function() {
             try {
-                fs.existsSync(path.join(process.env.NODE_RED_HOME,"lib")).should.be.true;
-                fs.existsSync(path.join(process.env.NODE_RED_HOME,"lib",'flows')).should.be.true;
+                fs.existsSync(path.join(process.env.NODE_RED_HOME,"lib")).should.be.true();
+                fs.existsSync(path.join(process.env.NODE_RED_HOME,"lib",'flows')).should.be.true();
                 settings.userDir.should.equal(process.env.NODE_RED_HOME);
                 done();
             } catch(err) {
@@ -65,18 +65,46 @@ describe('LocalFileSystem', function() {
         });
     });
 
+    it('should set userDir to HOMEPATH/.node-red if .config.json presents',function(done) {
+        var oldNRH = process.env.NODE_RED_HOME;
+        process.env.NODE_RED_HOME = path.join(userDir,"NRH");
+        var oldHOMEPATH = process.env.HOMEPATH;
+        process.env.HOMEPATH = path.join(userDir,"HOMEPATH");
+        fs.mkdirSync(process.env.HOMEPATH);
+        fs.mkdirSync(path.join(process.env.HOMEPATH,".node-red"));
+        fs.writeFileSync(path.join(process.env.HOMEPATH,".node-red",".config.json"),"{}","utf8");
+        var settings = {};
+        localfilesystem.init(settings).then(function() {
+            try {
+                fs.existsSync(path.join(process.env.HOMEPATH,".node-red","lib")).should.be.true();
+                fs.existsSync(path.join(process.env.HOMEPATH,".node-red","lib",'flows')).should.be.true();
+                settings.userDir.should.equal(path.join(process.env.HOMEPATH,".node-red"));
+                done();
+            } catch(err) {
+                done(err);
+            } finally {
+                process.env.NODE_RED_HOME = oldNRH;
+                process.env.NODE_HOMEPATH = oldHOMEPATH;
+            }
+        }).otherwise(function(err) {
+            done(err);
+        });
+    });
+
     it('should set userDir to HOME/.node-red',function(done) {
         var oldNRH = process.env.NODE_RED_HOME;
         process.env.NODE_RED_HOME = path.join(userDir,"NRH");
         var oldHOME = process.env.HOME;
         process.env.HOME = path.join(userDir,"HOME");
+        var oldHOMEPATH = process.env.HOMEPATH;
+        process.env.HOMEPATH = path.join(userDir,"HOMEPATH");
 
         fs.mkdirSync(process.env.HOME);
         var settings = {};
         localfilesystem.init(settings).then(function() {
             try {
-                fs.existsSync(path.join(process.env.HOME,".node-red","lib")).should.be.true;
-                fs.existsSync(path.join(process.env.HOME,".node-red","lib",'flows')).should.be.true;
+                fs.existsSync(path.join(process.env.HOME,".node-red","lib")).should.be.true();
+                fs.existsSync(path.join(process.env.HOME,".node-red","lib",'flows')).should.be.true();
                 settings.userDir.should.equal(path.join(process.env.HOME,".node-red"));
                 done();
             } catch(err) {
@@ -84,6 +112,38 @@ describe('LocalFileSystem', function() {
             } finally {
                 process.env.NODE_RED_HOME = oldNRH;
                 process.env.HOME = oldHOME;
+                process.env.HOMEPATH = oldHOMEPATH;
+            }
+        }).otherwise(function(err) {
+            done(err);
+        });
+    });
+
+    it('should set userDir to USERPROFILE/.node-red',function(done) {
+        var oldNRH = process.env.NODE_RED_HOME;
+        process.env.NODE_RED_HOME = path.join(userDir,"NRH");
+        var oldHOME = process.env.HOME;
+        process.env.HOME = "";
+        var oldHOMEPATH = process.env.HOMEPATH;
+        process.env.HOMEPATH = path.join(userDir,"HOMEPATH");
+        var oldUSERPROFILE = process.env.USERPROFILE;
+        process.env.USERPROFILE = path.join(userDir,"USERPROFILE");
+
+        fs.mkdirSync(process.env.USERPROFILE);
+        var settings = {};
+        localfilesystem.init(settings).then(function() {
+            try {
+                fs.existsSync(path.join(process.env.USERPROFILE,".node-red","lib")).should.be.true();
+                fs.existsSync(path.join(process.env.USERPROFILE,".node-red","lib",'flows')).should.be.true();
+                settings.userDir.should.equal(path.join(process.env.USERPROFILE,".node-red"));
+                done();
+            } catch(err) {
+                done(err);
+            } finally {
+                process.env.NODE_RED_HOME = oldNRH;
+                process.env.HOME = oldHOME;
+                process.env.HOMEPATH = oldHOMEPATH;
+                process.env.USERPROFILE = oldUSERPROFILE;
             }
         }).otherwise(function(err) {
             done(err);
@@ -94,7 +154,7 @@ describe('LocalFileSystem', function() {
         localfilesystem.init({userDir:userDir}).then(function() {
             var flowFile = 'flows_'+require('os').hostname()+'.json';
             var flowFilePath = path.join(userDir,flowFile);
-            fs.existsSync(flowFilePath).should.be.false;
+            fs.existsSync(flowFilePath).should.be.false();
             localfilesystem.getFlows().then(function(flows) {
                 flows.should.eql([]);
                 done();
@@ -112,7 +172,7 @@ describe('LocalFileSystem', function() {
             var flowFilePath = path.join(userDir,flowFile);
             var flowFileBackupPath = path.join(userDir,"."+flowFile+".backup");
             fs.closeSync(fs.openSync(flowFilePath, 'w'));
-            fs.existsSync(flowFilePath).should.be.true;
+            fs.existsSync(flowFilePath).should.be.true();
             localfilesystem.getFlows().then(function(flows) {
                 flows.should.eql([]);
                 done();
@@ -130,16 +190,18 @@ describe('LocalFileSystem', function() {
             var flowFilePath = path.join(userDir,flowFile);
             var flowFileBackupPath = path.join(userDir,"."+flowFile+".backup");
             fs.closeSync(fs.openSync(flowFilePath, 'w'));
-            fs.existsSync(flowFilePath).should.be.true;
-            fs.existsSync(flowFileBackupPath).should.be.false;
+            fs.existsSync(flowFilePath).should.be.true();
+            fs.existsSync(flowFileBackupPath).should.be.false();
             fs.writeFileSync(flowFileBackupPath,JSON.stringify(testFlow));
-            fs.existsSync(flowFileBackupPath).should.be.true;
-            localfilesystem.getFlows().then(function(flows) {
-                flows.should.eql(testFlow);
-                done();
-            }).otherwise(function(err) {
-                done(err);
-            });
+            fs.existsSync(flowFileBackupPath).should.be.true();
+            setTimeout(function() {
+                localfilesystem.getFlows().then(function(flows) {
+                    flows.should.eql(testFlow);
+                    done();
+                }).otherwise(function(err) {
+                    done(err);
+                });
+            },50);
         }).otherwise(function(err) {
             done(err);
         });
@@ -150,11 +212,11 @@ describe('LocalFileSystem', function() {
             var flowFile = 'flows_'+require('os').hostname()+'.json';
             var flowFilePath = path.join(userDir,flowFile);
             var flowFileBackupPath = path.join(userDir,"."+flowFile+".backup");
-            fs.existsSync(flowFilePath).should.be.false;
-            fs.existsSync(flowFileBackupPath).should.be.false;
+            fs.existsSync(flowFilePath).should.be.false();
+            fs.existsSync(flowFileBackupPath).should.be.false();
             localfilesystem.saveFlows(testFlow).then(function() {
-                fs.existsSync(flowFilePath).should.be.true;
-                fs.existsSync(flowFileBackupPath).should.be.false;
+                fs.existsSync(flowFilePath).should.be.true();
+                fs.existsSync(flowFileBackupPath).should.be.false();
                 localfilesystem.getFlows().then(function(flows) {
                     flows.should.eql(testFlow);
                     done();
@@ -176,12 +238,12 @@ describe('LocalFileSystem', function() {
         var flowFilePath = path.join(userDir,flowFile);
 
         localfilesystem.init({userDir:userDir, flowFile:flowFilePath}).then(function() {
-            fs.existsSync(defaultFlowFilePath).should.be.false;
-            fs.existsSync(flowFilePath).should.be.false;
+            fs.existsSync(defaultFlowFilePath).should.be.false();
+            fs.existsSync(flowFilePath).should.be.false();
 
             localfilesystem.saveFlows(testFlow).then(function() {
-                fs.existsSync(defaultFlowFilePath).should.be.false;
-                fs.existsSync(flowFilePath).should.be.true;
+                fs.existsSync(defaultFlowFilePath).should.be.false();
+                fs.existsSync(flowFilePath).should.be.true();
                 localfilesystem.getFlows().then(function(flows) {
                     flows.should.eql(testFlow);
                     done();
@@ -225,21 +287,21 @@ describe('LocalFileSystem', function() {
         var flowFileBackupPath = path.join(userDir,"."+flowFile+".backup");
 
         localfilesystem.init({userDir:userDir, flowFile:flowFilePath}).then(function() {
-            fs.existsSync(defaultFlowFilePath).should.be.false;
-            fs.existsSync(flowFilePath).should.be.false;
-            fs.existsSync(flowFileBackupPath).should.be.false;
+            fs.existsSync(defaultFlowFilePath).should.be.false();
+            fs.existsSync(flowFilePath).should.be.false();
+            fs.existsSync(flowFileBackupPath).should.be.false();
 
             localfilesystem.saveFlows(testFlow).then(function() {
-                fs.existsSync(flowFileBackupPath).should.be.false;
-                fs.existsSync(defaultFlowFilePath).should.be.false;
-                fs.existsSync(flowFilePath).should.be.true;
+                fs.existsSync(flowFileBackupPath).should.be.false();
+                fs.existsSync(defaultFlowFilePath).should.be.false();
+                fs.existsSync(flowFilePath).should.be.true();
                 var content = fs.readFileSync(flowFilePath,'utf8');
                 var testFlow2 = [{"type":"tab","id":"bc5672ad.2741d8","label":"Sheet 2"}];
 
                 localfilesystem.saveFlows(testFlow2).then(function() {
-                    fs.existsSync(flowFileBackupPath).should.be.true;
-                    fs.existsSync(defaultFlowFilePath).should.be.false;
-                    fs.existsSync(flowFilePath).should.be.true;
+                    fs.existsSync(flowFileBackupPath).should.be.true();
+                    fs.existsSync(defaultFlowFilePath).should.be.false();
+                    fs.existsSync(flowFilePath).should.be.true();
                     var backupContent = fs.readFileSync(flowFileBackupPath,'utf8');
                     content.should.equal(backupContent);
                     var content2 = fs.readFileSync(flowFilePath,'utf8');
@@ -265,7 +327,7 @@ describe('LocalFileSystem', function() {
         var flowFilePath = path.join(userDir,flowFile);
         var credFile = path.join(userDir,"test_cred.json");
         localfilesystem.init({userDir:userDir, flowFile:flowFilePath}).then(function() {
-            fs.existsSync(credFile).should.be.false;
+            fs.existsSync(credFile).should.be.false();
 
             localfilesystem.getCredentials().then(function(creds) {
                 creds.should.eql({});
@@ -285,12 +347,12 @@ describe('LocalFileSystem', function() {
 
         localfilesystem.init({userDir:userDir, flowFile:flowFilePath}).then(function() {
 
-            fs.existsSync(credFile).should.be.false;
+            fs.existsSync(credFile).should.be.false();
 
             var credentials = {"abc":{"type":"creds"}};
 
             localfilesystem.saveCredentials(credentials).then(function() {
-                fs.existsSync(credFile).should.be.true;
+                fs.existsSync(credFile).should.be.true();
                 localfilesystem.getCredentials().then(function(creds) {
                     creds.should.eql(credentials);
                     done();
@@ -316,14 +378,14 @@ describe('LocalFileSystem', function() {
 
             fs.writeFileSync(credFile,"{}","utf8");
 
-            fs.existsSync(credFile).should.be.true;
-            fs.existsSync(credFileBackup).should.be.false;
+            fs.existsSync(credFile).should.be.true();
+            fs.existsSync(credFileBackup).should.be.false();
 
             var credentials = {"abc":{"type":"creds"}};
 
             localfilesystem.saveCredentials(credentials).then(function() {
-                fs.existsSync(credFile).should.be.true;
-                fs.existsSync(credFileBackup).should.be.true;
+                fs.existsSync(credFile).should.be.true();
+                fs.existsSync(credFileBackup).should.be.true();
                 done();
             }).otherwise(function(err) {
                 done(err);
@@ -341,12 +403,12 @@ describe('LocalFileSystem', function() {
 
         localfilesystem.init({userDir:userDir, flowFile:flowFilePath, flowFilePretty:true}).then(function() {
 
-            fs.existsSync(credFile).should.be.false;
+            fs.existsSync(credFile).should.be.false();
 
             var credentials = {"abc":{"type":"creds"}};
 
             localfilesystem.saveCredentials(credentials).then(function() {
-                fs.existsSync(credFile).should.be.true;
+                fs.existsSync(credFile).should.be.true();
                 var content = fs.readFileSync(credFile,"utf8");
                 content.split("\n").length.should.be.above(1);
                 localfilesystem.getCredentials().then(function(creds) {
@@ -367,7 +429,7 @@ describe('LocalFileSystem', function() {
         var settingsFile = path.join(userDir,".settings.json");
 
         localfilesystem.init({userDir:userDir}).then(function() {
-            fs.existsSync(settingsFile).should.be.false;
+            fs.existsSync(settingsFile).should.be.false();
             localfilesystem.getSettings().then(function(settings) {
                 settings.should.eql({});
                 done();
@@ -383,7 +445,7 @@ describe('LocalFileSystem', function() {
         var settingsFile = path.join(userDir,".config.json");
         fs.writeFileSync(settingsFile,"[This is not json","utf8");
         localfilesystem.init({userDir:userDir}).then(function() {
-            fs.existsSync(settingsFile).should.be.true;
+            fs.existsSync(settingsFile).should.be.true();
             localfilesystem.getSettings().then(function(settings) {
                 settings.should.eql({});
                 done();
@@ -399,12 +461,12 @@ describe('LocalFileSystem', function() {
         var settingsFile = path.join(userDir,".config.json");
 
         localfilesystem.init({userDir:userDir}).then(function() {
-            fs.existsSync(settingsFile).should.be.false;
+            fs.existsSync(settingsFile).should.be.false();
 
             var settings = {"abc":{"type":"creds"}};
 
             localfilesystem.saveSettings(settings).then(function() {
-                fs.existsSync(settingsFile).should.be.true;
+                fs.existsSync(settingsFile).should.be.true();
                 localfilesystem.getSettings().then(function(_settings) {
                     _settings.should.eql(settings);
                     done();
@@ -423,7 +485,7 @@ describe('LocalFileSystem', function() {
         var sessionsFile = path.join(userDir,".sessions.json");
 
         localfilesystem.init({userDir:userDir}).then(function() {
-            fs.existsSync(sessionsFile).should.be.false;
+            fs.existsSync(sessionsFile).should.be.false();
             localfilesystem.getSessions().then(function(sessions) {
                 sessions.should.eql({});
                 done();
@@ -439,7 +501,7 @@ describe('LocalFileSystem', function() {
         var sessionsFile = path.join(userDir,".sessions.json");
         fs.writeFileSync(sessionsFile,"[This is not json","utf8");
         localfilesystem.init({userDir:userDir}).then(function() {
-            fs.existsSync(sessionsFile).should.be.true;
+            fs.existsSync(sessionsFile).should.be.true();
             localfilesystem.getSessions().then(function(sessions) {
                 sessions.should.eql({});
                 done();
@@ -455,12 +517,12 @@ describe('LocalFileSystem', function() {
         var sessionsFile = path.join(userDir,".sessions.json");
 
         localfilesystem.init({userDir:userDir}).then(function() {
-            fs.existsSync(sessionsFile).should.be.false;
+            fs.existsSync(sessionsFile).should.be.false();
 
             var sessions = {"abc":{"type":"creds"}};
 
             localfilesystem.saveSessions(sessions).then(function() {
-                fs.existsSync(sessionsFile).should.be.true;
+                fs.existsSync(sessionsFile).should.be.true();
                 localfilesystem.getSessions().then(function(_sessions) {
                     _sessions.should.eql(sessions);
                     done();
@@ -479,6 +541,19 @@ describe('LocalFileSystem', function() {
     it('should return an empty list of library objects',function(done) {
         localfilesystem.init({userDir:userDir}).then(function() {
             localfilesystem.getLibraryEntry('object','').then(function(flows) {
+                flows.should.eql([]);
+                done();
+            }).otherwise(function(err) {
+                done(err);
+            });
+        }).otherwise(function(err) {
+            done(err);
+        });
+    });
+
+    it('should return an empty list of library objects (path=/)',function(done) {
+        localfilesystem.init({userDir:userDir}).then(function() {
+            localfilesystem.getLibraryEntry('object','/').then(function(flows) {
                 flows.should.eql([]);
                 done();
             }).otherwise(function(err) {
@@ -512,9 +587,13 @@ describe('LocalFileSystem', function() {
         fs.mkdirSync(path.join(objLib,"A"));
         fs.mkdirSync(path.join(objLib,"B"));
         fs.mkdirSync(path.join(objLib,"B","C"));
-        fs.writeFileSync(path.join(objLib,"file1.js"),"// abc: def\n// not a metaline \n\n Hi",'utf8');
-        fs.writeFileSync(path.join(objLib,"B","file2.js"),"// ghi: jkl\n// not a metaline \n\n Hi",'utf8');
-        fs.writeFileSync(path.join(objLib,"B","flow.json"),"Hi",'utf8');
+        if (type === "functions" || type === "object") {
+            fs.writeFileSync(path.join(objLib,"file1.js"),"// abc: def\n// not a metaline \n\n Hi",'utf8');
+            fs.writeFileSync(path.join(objLib,"B","file2.js"),"// ghi: jkl\n// not a metaline \n\n Hi",'utf8');
+        }
+        if (type === "flows" || type === "object") {
+            fs.writeFileSync(path.join(objLib,"B","flow.json"),"Hi",'utf8');
+        }
     }
 
     it('should return a directory listing of library objects',function(done) {
@@ -569,23 +648,57 @@ describe('LocalFileSystem', function() {
         });
     });
 
-    it('should return a newly saved library object',function(done) {
+    it('should return a newly saved library function',function(done) {
         localfilesystem.init({userDir:userDir}).then(function() {
-            createObjectLibrary();
-            localfilesystem.getLibraryEntry('object','B').then(function(flows) {
-                flows.should.eql([ 'C', { ghi: 'jkl', fn: 'file2.js' }, {fn:'flow.json'} ]);
-                localfilesystem.saveLibraryEntry('object','B/D/file3.js',{mno:'pqr'},"// another non meta line\n\n Hi There").then(function() {
-                    localfilesystem.getLibraryEntry('object','B/D').then(function(flows) {
-                        flows.should.eql([ { mno: 'pqr', fn: 'file3.js' } ]);
-                        localfilesystem.getLibraryEntry('object','B/D/file3.js').then(function(body) {
-                            body.should.eql("// another non meta line\n\n Hi There");
-                            done();
+            createObjectLibrary("functions");
+            localfilesystem.getLibraryEntry('functions','B').then(function(flows) {
+                flows.should.eql([ 'C', { ghi: 'jkl', fn: 'file2.js' } ]);
+                var ft = path.join("B","D","file3.js");
+                localfilesystem.saveLibraryEntry('functions',ft,{mno:'pqr'},"// another non meta line\n\n Hi There").then(function() {
+                    setTimeout(function() {
+                        localfilesystem.getLibraryEntry('functions',path.join("B","D")).then(function(flows) {
+                            flows.should.eql([ { mno: 'pqr', fn: 'file3.js' } ]);
+                            localfilesystem.getLibraryEntry('functions',ft).then(function(body) {
+                                body.should.eql("// another non meta line\n\n Hi There");
+                                done();
+                            }).otherwise(function(err) {
+                                done(err);
+                            });
                         }).otherwise(function(err) {
                             done(err);
-                        });
-                    }).otherwise(function(err) {
-                        done(err);
-                    });
+                        })}
+                        , 50);
+                }).otherwise(function(err) {
+                    done(err);
+                });
+            }).otherwise(function(err) {
+                done(err);
+            });
+        }).otherwise(function(err) {
+            done(err);
+        });
+    });
+
+    it('should return a newly saved library flow',function(done) {
+        localfilesystem.init({userDir:userDir}).then(function() {
+            createObjectLibrary("flows");
+            localfilesystem.getLibraryEntry('flows','B').then(function(flows) {
+                flows.should.eql([ 'C', {fn:'flow.json'} ]);
+                var ft = path.join("B","D","file3");
+                localfilesystem.saveLibraryEntry('flows',ft,{mno:'pqr'},"Hi").then(function() {
+                    setTimeout(function() {
+                        localfilesystem.getLibraryEntry('flows',path.join("B","D")).then(function(flows) {
+                            flows.should.eql([ { mno: 'pqr', fn: 'file3.json' } ]);
+                            localfilesystem.getLibraryEntry('flows',ft+".json").then(function(body) {
+                                body.should.eql("Hi");
+                                done();
+                            }).otherwise(function(err) {
+                                done(err);
+                            });
+                        }).otherwise(function(err) {
+                            done(err);
+                        })}
+                        , 50);
                 }).otherwise(function(err) {
                     done(err);
                 });

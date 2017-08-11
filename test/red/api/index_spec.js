@@ -1,5 +1,5 @@
 /**
- * Copyright 2014, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,10 @@ describe("api index", function() {
     describe("disables editor", function() {
         before(function() {
             api.init({},{
-                settings:{httpNodeRoot:true, httpAdminRoot: true,disableEditor:true},
-                events: {on:function(){},removeListener: function(){}}
+                settings:{httpNodeRoot:true, httpAdminRoot: true,disableEditor:true, exportNodeSettings: function() {}},
+                events: {on:function(){},removeListener: function(){}},
+                log: {info:function(){},_:function(){}},
+                nodes: {paletteEditorEnabled: function(){return true}}
             });
             app = api.adminApp;
         });
@@ -54,7 +56,7 @@ describe("api index", function() {
 
     describe("can serve auth", function() {
         var mockList = [
-            'ui','nodes','flows','library','info','theme','locales','credentials'
+            'ui','nodes','flows','library','info','locales','credentials'
         ]
         before(function() {
             mockList.forEach(function(m) {
@@ -119,7 +121,7 @@ describe("api index", function() {
                         return done(err);
                     }
                     res.text.should.eql("Not started");
-                    errorLog.calledOnce.should.be.true;
+                    errorLog.calledOnce.should.be.true();
                     done();
                 });
         });

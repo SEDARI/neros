@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,13 +31,18 @@ var defaultContext = {
         image: "red/images/node-red.png"
     },
     asset: {
-        red: (process.env.NODE_ENV == "development")? "red/red.js":"red/red.min.js"
+        red: (process.env.NODE_ENV == "development")? "red/red.js":"red/red.min.js",
+        main: (process.env.NODE_ENV == "development")? "red/main.js":"red/main.min.js",
+
     }
 };
 
 var theme = null;
 var themeContext = clone(defaultContext);
 var themeSettings = null;
+var runtime = null;
+
+var themeApp;
 
 function serveFile(app,baseUrl,file) {
     try {
@@ -54,6 +59,24 @@ function serveFile(app,baseUrl,file) {
     }
 }
 
+function serveFilesFromTheme(themeValue, themeApp, directory) {
+    var result = [];
+    if (themeValue) {
+        var array = themeValue;
+        if (!util.isArray(array)) {
+            array = [array];
+        }
+
+        for (var i=0;i<array.length;i++) {
+            var url = serveFile(themeApp,directory,array[i]);
+            if (url) {
+                result.push(url);
+            }
+        }
+    }
+    return result
+}
+
 module.exports = {
     init: function(runtime) {
         var settings = runtime.settings;
@@ -62,7 +85,7 @@ module.exports = {
             themeContext.version = runtime.version();
         }
         themeSettings = null;
-        theme = settings.editorTheme;
+        theme = settings.editorTheme || {};
     },
 
     app: function() {
@@ -70,23 +93,18 @@ module.exports = {
         var url;
         themeSettings = {};
 
-        var themeApp = express();
+        themeApp = express();
 
         if (theme.page) {
-            if (theme.page.css) {
-                var styles = theme.page.css;
-                if (!util.isArray(styles)) {
-                    styles = [styles];
-                }
-                themeContext.page.css = [];
 
-                for (i=0;i<styles.length;i++) {
-                    url = serveFile(themeApp,"/css/",styles[i]);
-                    if (url) {
-                        themeContext.page.css.push(url);
-                    }
-                }
-            }
+            themeContext.page.css = serveFilesFromTheme(
+                theme.page.css,
+                themeApp,
+                "/css/")
+            themeContext.page.scripts = serveFilesFromTheme(
+                theme.page.scripts,
+                themeApp,
+                "/scripts/")
 
             if (theme.page.favicon) {
                 url = serveFile(themeApp,"/favicon/",theme.page.favicon)
@@ -94,7 +112,7 @@ module.exports = {
                     themeContext.page.favicon = url;
                 }
             }
-            
+
             if (theme.page.tabicon) {
                 url = serveFile(themeApp,"/tabicon/",theme.page.tabicon)
                 if (url) {
@@ -161,6 +179,9 @@ module.exports = {
             themeSettings.menu = theme.menu;
         }
 
+        if (theme.hasOwnProperty("palette")) {
+            themeSettings.palette = theme.palette;
+        }
         return themeApp;
     },
     context: function() {
@@ -168,5 +189,8 @@ module.exports = {
     },
     settings: function() {
         return themeSettings;
+    },
+    serveFile: function(baseUrl,file) {
+        return serveFile(themeApp,baseUrl,file);
     }
 }

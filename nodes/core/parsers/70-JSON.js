@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 module.exports = function(RED) {
     "use strict";
-    var util = require("util");
 
     function JSONNode(n) {
         RED.nodes.createNode(this,n);
+        this.indent = n.pretty ? 4 : 0;
         var node = this;
         this.on("input", function(msg) {
             if (msg.hasOwnProperty("payload")) {
@@ -33,12 +33,10 @@ module.exports = function(RED) {
                 else if (typeof msg.payload === "object") {
                     if (!Buffer.isBuffer(msg.payload)) {
                         try {
-                            msg.payload = JSON.stringify(msg.payload);
+                            msg.payload = JSON.stringify(msg.payload,null,node.indent);
                             node.send(msg);
                         }
-                        catch(e) {
-                            node.error(RED._("json.errors.dropped-error"));
-                        }
+                        catch(e) { node.error(RED._("json.errors.dropped-error")); }
                     }
                     else { node.warn(RED._("json.errors.dropped-object")); }
                 }

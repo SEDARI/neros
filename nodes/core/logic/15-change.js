@@ -1,5 +1,5 @@
 /**
- * Copyright 2013, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,12 @@ module.exports = function(RED) {
 
     function ChangeNode(n) {
         RED.nodes.createNode(this, n);
+        var node = this;
 
         this.rules = n.rules;
+        var rule;
         if (!this.rules) {
-            var rule = {
+            rule = {
                 t:(n.action=="replace"?"set":n.action),
                 p:n.property||""
             }
@@ -39,7 +41,7 @@ module.exports = function(RED) {
 
         var valid = true;
         for (var i=0;i<this.rules.length;i++) {
-            var rule = this.rules[i];
+            rule = this.rules[i];
             // Migrate to type-aware rules
             if (!rule.pt) {
                 rule.pt = "msg";
@@ -74,15 +76,23 @@ module.exports = function(RED) {
             }
             if (rule.tot === 'num') {
                 rule.to = Number(rule.to);
-            } else if (rule.tot === 'json') {
+            } else if (rule.tot === 'json' || rule.tot === 'bin') {
                 try {
-                    rule.to = JSON.parse(rule.to);
+                    // check this is parsable JSON
+                    JSON.parse(rule.to);
                 } catch(e2) {
                     valid = false;
                     this.error(RED._("change.errors.invalid-json"));
                 }
             } else if (rule.tot === 'bool') {
                 rule.to = /^true$/i.test(rule.to);
+            } else if (rule.tot === 'jsonata') {
+                try {
+                    rule.to = RED.util.prepareJSONataExpression(rule.to,this);
+                } catch(e) {
+                    valid = false;
+                    this.error(RED._("change.errors.invalid-expr",{error:e.message}));
+                }
             }
         }
 
@@ -90,6 +100,11 @@ module.exports = function(RED) {
             try {
                 var property = rule.p;
                 var value = rule.to;
+                if (rule.tot === 'json') {
+                    value = JSON.parse(rule.to);
+                } else if (rule.tot === 'bin') {
+                    value = Buffer.from(JSON.parse(rule.to))
+                }
                 var current;
                 var fromValue;
                 var fromType;
@@ -102,6 +117,13 @@ module.exports = function(RED) {
                     value = node.context().global.get(rule.to);
                 } else if (rule.tot === 'date') {
                     value = Date.now();
+                } else if (rule.tot === 'jsonata') {
+                    try{
+                        value = RED.util.evaluateJSONataExpression(rule.to,msg);
+                    } catch(err) {
+                        node.error(RED._("change.errors.invalid-expr",{error:err.message}));
+                        return;
+                    }
                 }
                 if (rule.t === 'change') {
                     if (rule.fromt === 'msg' || rule.fromt === 'flow' || rule.fromt === 'global') {
@@ -147,7 +169,7 @@ module.exports = function(RED) {
                     } else if (rule.t === 'change') {
                         current = RED.util.getMessageProperty(msg,property);
                         if (typeof current === 'string') {
-                            if ((fromType === 'num' || fromType === 'bool') && current === fromValue) {
+                            if ((fromType === 'num' || fromType === 'bool' || fromType === 'str') && current === fromValue) {
                                 // str representation of exact from number/boolean
                                 // only replace if they match exactly
                                 RED.util.setMessageProperty(msg,property,value);
@@ -165,7 +187,8 @@ module.exports = function(RED) {
                             }
                         }
                     }
-                } else {
+                }
+                else {
                     var target;
                     if (rule.pt === 'flow') {
                         target = node.context().flow;
@@ -180,7 +203,7 @@ module.exports = function(RED) {
                         } else if (rule.t === 'change') {
                             current = target.get(msg,property);
                             if (typeof current === 'string') {
-                                if ((fromType === 'num' || fromType === 'bool') && current === fromValue) {
+                                if ((fromType === 'num' || fromType === 'bool' || fromType === 'str') && current === fromValue) {
                                     // str representation of exact from number/boolean
                                     // only replace if they match exactly
                                     target.set(property,value);
@@ -204,16 +227,15 @@ module.exports = function(RED) {
             return msg;
         }
         if (valid) {
-            var node = this;
             this.on('input', function(msg) {
-                for (var i=0;i<this.rules.length;i++) {
+                for (var i=0; i<this.rules.length; i++) {
                     if (this.rules[i].t === "move") {
                         var r = this.rules[i];
-                        if (r.to.indexOf(r.pt) !== -1) {
+                        if ((r.tot !== r.pt) || (r.p.indexOf(r.to) !== -1)) {
                             msg = applyRule(msg,{t:"set", p:r.to, pt:r.tot, to:r.p, tot:r.pt});
                             applyRule(msg,{t:"delete", p:r.p, pt:r.pt});
                         }
-                        else { // 2 step move if we are moving to a child
+                        else { // 2 step move if we are moving from a child
                             msg = applyRule(msg,{t:"set", p:"_temp_move", pt:r.tot, to:r.p, tot:r.pt});
                             applyRule(msg,{t:"delete", p:r.p, pt:r.pt});
                             msg = applyRule(msg,{t:"set", p:r.to, pt:r.tot, to:"_temp_move", tot:r.pt});

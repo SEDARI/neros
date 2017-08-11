@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ var sinon = require('sinon');
 var when = require('when');
 
 var nodes = require("../../../red/api/nodes");
-var comms = require("../../../red/api/comms");
 var locales = require("../../../red/api/locales");
 
 describe("nodes api", function() {
@@ -34,6 +33,9 @@ describe("nodes api", function() {
             _:function(){},
             info: function(){},
             warn: function(){}
+        }
+        runtime.events = {
+            emit: function(){}
         }
         nodes.init(runtime);
 
@@ -49,15 +51,11 @@ describe("nodes api", function() {
         app.put(/\/nodes\/((@[^\/]+\/)?[^\/]+)$/,nodes.putModule);
         app.put(/\/nodes\/((@[^\/]+\/)?[^\/]+)\/([^\/]+)$/,nodes.putSet);
         app.delete("/nodes/:id",nodes.delete);
-        sinon.stub(comms,"publish");
         sinon.stub(locales,"determineLangFromHeaders", function() {
             return "en-US";
         });
     });
 
-    after(function() {
-        comms.publish.restore();
-    });
 
     describe('get nodes', function() {
         it('returns node list', function(done) {
@@ -76,7 +74,7 @@ describe("nodes api", function() {
                     if (err) {
                         throw err;
                     }
-                    res.body.should.be.an.Array;
+                    res.body.should.be.an.Array();
                     res.body.should.have.lengthOf(3);
                     done();
                 });
@@ -583,8 +581,8 @@ describe("nodes api", function() {
                         if (err) {
                             throw err;
                         }
-                        enableNodeCalled.should.be.false;
-                        disableNodeCalled.should.be.false;
+                        enableNodeCalled.should.be.false();
+                        disableNodeCalled.should.be.false();
                         res.body.should.have.property("id","123");
                         res.body.should.have.property("enabled",state);
 
@@ -744,8 +742,8 @@ describe("nodes api", function() {
                         if (err) {
                             throw err;
                         }
-                        enableNodeCalled.should.be.false;
-                        disableNodeCalled.should.be.false;
+                        enableNodeCalled.should.be.false();
+                        disableNodeCalled.should.be.false();
                         res.body.should.have.property("name","node-red");
                         res.body.should.have.property("nodes");
                         res.body.nodes[0].should.have.property("enabled",state);
